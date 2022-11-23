@@ -1,0 +1,12 @@
+.taskcat/
+taskcat_outputs/
+
+# Chart dependencies
+**/charts/*.tgz
+Chart.lock
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+
