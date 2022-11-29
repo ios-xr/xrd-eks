@@ -1,0 +1,21 @@
+# pyproject.toml
+
+[tool.black]
+line-length = 79
+target-version = ["py37", "py38", "py39", "py310"]
+
+[tool.isort]
+line_length = 79
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+order_by_type = true
+lines_after_imports = 2
+
+[tool.pytest.ini_options]
+markers = [
+    "quickstart",
+    "control_plane",
+    "vrouter",
+]

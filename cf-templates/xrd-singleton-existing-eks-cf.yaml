@@ -1,0 +1,722 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Deploy single XRd router into existing EKS
+
+Parameters:
+  KeyPairName:
+    Description: Name of an existing EC2 key pair. All instances will launch with this key pair. Ignored if "Custom launch template" is provided. If left blank, no key pair will be associated with the nodes.
+    Type: String
+    Default: ""
+  CustomAmiId:
+    Type: String
+    Default: ""
+    Description: AMI id of image suitable for running XRd vRouter
+  NodeInstanceType:
+    Default: m5n.2xlarge
+    AllowedValues:
+      - m5.2xlarge
+      - m5.24xlarge
+      - m5n.2xlarge
+      - m5n.24xlarge
+    ConstraintDescription: Must be a supported EC2 instance type
+    Description: Type of EC2 instance for the node instances.
+    Type: String
+  EKSClusterName:
+    Description: Name of the EKS cluster to join.
+    Type: String
+  WorkerNodeName:
+    Default: "worker"
+    Type: String
+    Description: Name of the node - added as a K8S tag and provides target for the XRd instance.
+  SubnetID:
+    Description: ID of subnet for the primary (K8S) ENI for XRd worker nodes (e.g.,subnet-a0246123).
+    Type: AWS::EC2::Subnet::Id
+  NodeIP:
+    Default: "10.0.101.11"
+    Type: String
+    Description: IP address for node.
+
+  Platform:
+    Type: String
+    AllowedValues: [ "VRouter", "ControlPlane" ]
+    Default: "VRouter"
+    Description: Which XRd platform to deploy - XRd vRouter or XRd Control Plane
+
+  XrdRootUserName:
+    Type: String
+    Description: Root username for the XRd instance.
+  XrdRootPassword:
+    Type: String
+    Description: Root password for the XRd instance
+
+  XrdInterface1IP:
+    Default: "10.0.1.11/24"
+    Type: String
+    Description: (Optional) IP address for first XRd interface
+  XrdInterface1SubnetTagValue:
+    Default: "1"
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for first XRd interface
+  XrdInterface2IP:
+    Default: "10.0.2.11/24"
+    Type: String
+    Description: (Optional) IP address for second XRd interface
+  XrdInterface2SubnetTagValue:
+    Default: "2"
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for second XRd interface
+  XrdInterface3IP:
+    Default: "10.0.3.11/24"
+    Type: String
+    Description: (Optional) IP address for 3rd XRd interface
+  XrdInterface3SubnetTagValue:
+    Default: "3"
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for third XRd interface
+  XrdInterface4IP:
+    # Default: "10.0.4.11/24"
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 4th XRd interface
+  XrdInterface4SubnetTagValue:
+    # Default: "4"
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 4th XRd interface
+  XrdInterface5IP:
+    # Default: "10.0.5.11/24"
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 5th XRd interface
+  XrdInterface5SubnetTagValue:
+    # Default: "5"
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 5th XRd interface
+  XrdInterface6IP:
+    # Default: "10.0.6.11/24"
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 6th XRd interface
+  XrdInterface6SubnetTagValue:
+    # Default: "6"
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 6th XRd interface
+  XrdInterface7IP:
+    # Default: "10.0.7.11/24"
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 7th XRd interface
+  XrdInterface7SubnetTagValue:
+    # Default: "7"
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 7th XRd interface
+  XrdInterface8IP:
+    # Default: "10.0.8.11/24"
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 8th XRd interface
+  XrdInterface8SubnetTagValue:
+    # Default: "8"
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 8th XRd interface
+  XrdInterface9IP:
+    # Default: "10.0.9.11/24"
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 9th XRd interface
+  XrdInterface9SubnetTagValue:
+    # Default: "9"
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 9th XRd interface
+  XrdInterface10IP:
+    # Default: "10.0.10.11/24"
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 10th XRd interface
+  XrdInterface10SubnetTagValue:
+    # Default: "10"
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 10th XRd interface
+  XrdInterface11IP:
+    # Default: "10.0.11.11/24"
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 11th XRd interface
+  XrdInterface11SubnetTagValue:
+    # Default: "11"
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 11th XRd interface
+  XrdInterface12IP:
+    # Default: "10.0.12.11/24"
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 12th XRd interface
+  XrdInterface12SubnetTagValue:
+    # Default: "12"
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 12th XRd interface
+  XrdInterface13IP:
+    # Default: "10.0.13.11/24"
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 13th XRd interface
+  XrdInterface13SubnetTagValue:
+    # Default: "13"
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 13th XRd interface
+  XrdInterface14IP:
+    # Default: "10.0.14.11/24"
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 14th XRd interface
+  XrdInterface14SubnetTagValue:
+    # Default: "14"
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 14th XRd interface
+
+  XrdS3BucketName:
+    # Default: TBD
+    Type: String
+  XrdS3KeyPrefix:
+    # Default: TBD
+    Type: String
+  XrdS3BucketRegion:
+    # Default: TBD
+    Type: String
+
+  ImageRepository:
+    Type: String
+    Default: ""
+    Description: "(Optional) Repository with XRd container image.  If not specified account's private ECR repo is used"
+  ImageTag:
+    Type: String
+    Description: "Image tag"
+    Default: "latest"
+  HelmRepository:
+    Type: String
+    Description: "Helm repository"
+  HelmChartName:
+    Type: String
+    Description: "Helm chart name.  If not specified 'xrd-vrouter' or 'xrd-control-plane' will be used depending on platform"
+    Default: ""
+  HelmChartVersion:
+    Type: String
+    Description: "Helm chart version.  If not specified latest released version will be used"
+    Default: ""
+  HelmReleaseName:
+    Type: String
+    Description: "Helm release name"
+    Default: "xrd"
+  SkipNodeStack:
+    Type: String
+    AllowedValues: [ "Yes", "No" ]
+    Default: "No"
+    Description: Specify Yes to avoid installing the nodes and just install the helm chart
+  SkipHelmRelease:
+    Type: String
+    AllowedValues: [ "Yes", "No" ]
+    Default: "No"
+    Description: Specify Yes to avoid installing the helm chart and just create the underlying infrastructure
+
+Conditions:
+  XrdInterface1Required: !Not [ !Equals [ !Ref XrdInterface1SubnetTagValue, '' ] ]
+  XrdInterface1IPSpecified: !Not [ !Equals [ !Ref XrdInterface1IP, '' ] ]
+  XrdInterface2Required: !Not [ !Equals [ !Ref XrdInterface2SubnetTagValue, '' ] ]
+  XrdInterface2IPSpecified: !Not [ !Equals [ !Ref XrdInterface2IP, '' ] ]
+  XrdInterface3Required: !Not [ !Equals [ !Ref XrdInterface3SubnetTagValue, '' ] ]
+  XrdInterface3IPSpecified: !Not [ !Equals [ !Ref XrdInterface3IP, '' ] ]
+  XrdInterface4Required: !Not [ !Equals [ !Ref XrdInterface4SubnetTagValue, '' ] ]
+  XrdInterface4IPSpecified: !Not [ !Equals [ !Ref XrdInterface4IP, '' ] ]
+  XrdInterface5Required: !Not [ !Equals [ !Ref XrdInterface5SubnetTagValue, '' ] ]
+  XrdInterface5IPSpecified: !Not [ !Equals [ !Ref XrdInterface5IP, '' ] ]
+  XrdInterface6Required: !Not [ !Equals [ !Ref XrdInterface6SubnetTagValue, '' ] ]
+  XrdInterface6IPSpecified: !Not [ !Equals [ !Ref XrdInterface6IP, '' ] ]
+  XrdInterface7Required: !Not [ !Equals [ !Ref XrdInterface7SubnetTagValue, '' ] ]
+  XrdInterface7IPSpecified: !Not [ !Equals [ !Ref XrdInterface7IP, '' ] ]
+  XrdInterface8Required: !Not [ !Equals [ !Ref XrdInterface8SubnetTagValue, '' ] ]
+  XrdInterface8IPSpecified: !Not [ !Equals [ !Ref XrdInterface8IP, '' ] ]
+  XrdInterface9Required: !Not [ !Equals [ !Ref XrdInterface9SubnetTagValue, '' ] ]
+  XrdInterface9IPSpecified: !Not [ !Equals [ !Ref XrdInterface9IP, '' ] ]
+  XrdInterface10Required: !Not [ !Equals [ !Ref XrdInterface10SubnetTagValue, '' ] ]
+  XrdInterface10IPSpecified: !Not [ !Equals [ !Ref XrdInterface10IP, '' ] ]
+  XrdInterface11Required: !Not [ !Equals [ !Ref XrdInterface11SubnetTagValue, '' ] ]
+  XrdInterface11IPSpecified: !Not [ !Equals [ !Ref XrdInterface11IP, '' ] ]
+  XrdInterface12Required: !Not [ !Equals [ !Ref XrdInterface12SubnetTagValue, '' ] ]
+  XrdInterface12IPSpecified: !Not [ !Equals [ !Ref XrdInterface12IP, '' ] ]
+  XrdInterface13Required: !Not [ !Equals [ !Ref XrdInterface13SubnetTagValue, '' ] ]
+  XrdInterface13IPSpecified: !Not [ !Equals [ !Ref XrdInterface13IP, '' ] ]
+  XrdInterface14Required: !Not [ !Equals [ !Ref XrdInterface14SubnetTagValue, '' ] ]
+  XrdInterface14IPSpecified: !Not [ !Equals [ !Ref XrdInterface14IP, '' ] ]
+
+  HelmChartNameSpecified: !Not [ !Equals [ !Ref HelmChartName, '' ] ]
+  NodeStackRequired: !Equals [ !Ref SkipNodeStack, 'No']
+  HelmReleaseRequired: !Equals [ !Ref SkipHelmRelease, 'No']
+
+  PlatformIsVRouter: !Not [ !Equals [ !Ref Platform, 'ControlPlane'] ]
+  UseDefaultImageRepository: !Equals [ !Ref ImageRepository, "" ]
+
+Mappings:
+  DefaultHelmChartName:
+    VRouter:
+      HelmChartName: "xrd-vrouter"
+    ControlPlane:
+      HelmChartName: "xrd-control-plane"
+  VRouterInstanceTypeProperties:
+    m5.2xlarge:
+      HugePagesGB: ""
+      IsolatedCores: "1-3"
+      HugePages: "hugepages-1Gi: \"3Gi\""
+      CpuSet: "1-3"
+      ControlPlaneCpuCount: "1"
+    m5n.2xlarge:
+      HugePagesGB: ""
+      IsolatedCores: "1-3"
+      HugePages: "hugepages-1Gi: \"3Gi\""
+      CpuSet: "1-3"
+      ControlPlaneCpuCount: "1"
+    m5.24xlarge:
+      # Whilst XRd only needs 6Gb, this is a dual-socket NUMA and hugepages are
+      # split between the sockets so need to allocate double.
+      # [Alternatively could explicitly move to the right socket during boot]
+      HugePagesGB: "12"
+      IsolatedCores: "16-23"
+      HugePages: "hugepages-1Gi: \"6Gi\""
+      CpuSet: "12-23"
+      ControlPlaneCpuCount: "4"
+    m5n.24xlarge:
+      # Whilst XRd only needs 6Gb, this is a dual-socket NUMA and hugepages are
+      # split between the sockets so need to allocate double.
+      # [Alternatively could explicitly move to the right socket during boot]
+      HugePagesGB: "12"
+      IsolatedCores: "16-23"
+      HugePages: "hugepages-1Gi: \"6Gi\""
+      CpuSet: "12-23"
+      ControlPlaneCpuCount: "4"
+
+Resources:
+
+  VPCID:
+    Condition: NodeStackRequired
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand:  ec2 describe-subnets --subnet-ids subnet-0590a9491fa8e95a7 --query Subnets[0]
+      IdField: 'VpcId'
+
+  NodeStack:
+    Condition: NodeStackRequired
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-eks-node-cf.yaml
+      Parameters:
+        KeyPairName: !Ref KeyPairName
+        CustomAmiId: !Ref CustomAmiId
+        Platform: !Ref Platform
+        HugePagesGB: !FindInMap [VRouterInstanceTypeProperties, !Ref NodeInstanceType, HugePagesGB]
+        IsolatedCores: !FindInMap [VRouterInstanceTypeProperties, !Ref NodeInstanceType, IsolatedCores]
+        SubnetID: !Ref SubnetID
+        NodeInstanceType: !Ref NodeInstanceType
+        EKSClusterName: !Ref EKSClusterName
+        WorkerNodeName: !Ref WorkerNodeName
+        NodeIP: !Ref NodeIP
+
+        XrdInterface1SubnetTagValue: !Ref XrdInterface1SubnetTagValue
+        XrdInterface1IP: !If [ XrdInterface1IPSpecified, !Select [ 0, !Split [ '/', !Ref XrdInterface1IP ]], !Ref AWS::NoValue ]
+        XrdInterface2SubnetTagValue: !Ref XrdInterface2SubnetTagValue
+        XrdInterface2IP: !If [ XrdInterface2IPSpecified, !Select [ 0, !Split [ '/', !Ref XrdInterface2IP ]], !Ref AWS::NoValue ]
+        XrdInterface3SubnetTagValue: !Ref XrdInterface3SubnetTagValue
+        XrdInterface3IP: !If [ XrdInterface3IPSpecified, !Select [ 0, !Split [ '/', !Ref XrdInterface3IP ]], !Ref AWS::NoValue ]
+        XrdInterface4SubnetTagValue: !Ref XrdInterface4SubnetTagValue
+        XrdInterface4IP: !If [ XrdInterface4IPSpecified, !Select [ 0, !Split [ '/', !Ref XrdInterface4IP ]], !Ref AWS::NoValue ]
+        XrdInterface5SubnetTagValue: !Ref XrdInterface5SubnetTagValue
+        XrdInterface5IP: !If [ XrdInterface5IPSpecified, !Select [ 0, !Split [ '/', !Ref XrdInterface5IP ]], !Ref AWS::NoValue ]
+        XrdInterface6SubnetTagValue: !Ref XrdInterface6SubnetTagValue
+        XrdInterface6IP: !If [ XrdInterface6IPSpecified, !Select [ 0, !Split [ '/', !Ref XrdInterface6IP ]], !Ref AWS::NoValue ]
+        XrdInterface7SubnetTagValue: !Ref XrdInterface7SubnetTagValue
+        XrdInterface7IP: !If [ XrdInterface7IPSpecified, !Select [ 0, !Split [ '/', !Ref XrdInterface7IP ]], !Ref AWS::NoValue ]
+        XrdInterface8SubnetTagValue: !Ref XrdInterface8SubnetTagValue
+        XrdInterface8IP: !If [ XrdInterface8IPSpecified, !Select [ 0, !Split [ '/', !Ref XrdInterface8IP ]], !Ref AWS::NoValue ]
+        XrdInterface9SubnetTagValue: !Ref XrdInterface9SubnetTagValue
+        XrdInterface9IP: !If [ XrdInterface9IPSpecified, !Select [ 0, !Split [ '/', !Ref XrdInterface9IP ]], !Ref AWS::NoValue ]
+        XrdInterface10SubnetTagValue: !Ref XrdInterface10SubnetTagValue
+        XrdInterface10IP: !If [ XrdInterface10IPSpecified, !Select [ 0, !Split [ '/', !Ref XrdInterface10IP ]], !Ref AWS::NoValue ]
+        XrdInterface11SubnetTagValue: !Ref XrdInterface11SubnetTagValue
+        XrdInterface11IP: !If [ XrdInterface11IPSpecified, !Select [ 0, !Split [ '/', !Ref XrdInterface11IP ]], !Ref AWS::NoValue ]
+        XrdInterface12SubnetTagValue: !Ref XrdInterface12SubnetTagValue
+        XrdInterface12IP: !If [ XrdInterface12IPSpecified, !Select [ 0, !Split [ '/', !Ref XrdInterface12IP ]], !Ref AWS::NoValue ]
+        XrdInterface13SubnetTagValue: !Ref XrdInterface13SubnetTagValue
+        XrdInterface13IP: !If [ XrdInterface13IPSpecified, !Select [ 0, !Split [ '/', !Ref XrdInterface13IP ]], !Ref AWS::NoValue ]
+        XrdInterface14SubnetTagValue: !Ref XrdInterface14SubnetTagValue
+        XrdInterface14IP: !If [ XrdInterface14IPSpecified, !Select [ 0, !Split [ '/', !Ref XrdInterface14IP ]], !Ref AWS::NoValue ]
+
+        XrdS3BucketName: !Ref XrdS3BucketName
+        XrdS3KeyPrefix: !Ref XrdS3KeyPrefix
+        XrdS3BucketRegion: !Ref XrdS3BucketRegion
+
+  HelmRelease:
+    Condition: HelmReleaseRequired
+    Type: "AWSQS::Kubernetes::Helm"
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            # Custom resource AWSQS::Kubernetes::Helm not found during Lint.
+            - E3001
+            # See 'ConditionalDependsOnHack' below
+            - W1019
+    Properties:
+      ClusterID: !Sub
+        - '${EKSClusterName}'
+        - EKSClusterName: !Ref EKSClusterName
+          # Hack to make dependency on nodestack conditional on the input parameter.
+          ConditionalDependsOnHack: !If [ NodeStackRequired, !GetAtt NodeStack.Outputs.Instance, '']
+
+      Name: !Ref HelmReleaseName
+      Repository: !Ref HelmRepository
+      Version: !Ref HelmChartVersion
+      Chart: !If [ HelmChartNameSpecified, !Ref HelmChartName, !FindInMap [DefaultHelmChartName, !Ref Platform, HelmChartName] ]
+      ValueYaml: !If
+        - PlatformIsVRouter
+        - !Sub
+          - |
+            image:
+              repository: ${ImageRepository}
+              tag: ${ImageTag}
+              pullPolicy: Always
+            resources:
+              limits:
+                ${HugePages}
+            securityContext:
+              privileged: true
+            nodeSelector:
+              xrd.node: ${WorkerNodeName}
+            persistence:
+              enabled: true
+              size: "6Gi"
+              accessModes:
+              - ReadWriteOnce
+              storageClass: "gp2"
+            config:
+              # ASCII XR configuration to be applied on XR boot.
+              username: ${XrdRootUserName}
+              password: ${XrdRootPassword}
+              ascii: |
+                hostname xrd
+                logging console debugging
+                logging monitor debugging
+                ${Interface1Config}
+                ${Interface2Config}
+                ${Interface3Config}
+                ${Interface4Config}
+                ${Interface5Config}
+                ${Interface6Config}
+                ${Interface7Config}
+                ${Interface8Config}
+                ${Interface9Config}
+                ${Interface10Config}
+                ${Interface11Config}
+                ${Interface12Config}
+                ${Interface13Config}
+                ${Interface14Config}
+              asciiEveryBoot: True
+            cpu:
+              cpuset: ${CpuSet}
+              controlPlaneCpuCount: ${ControlPlaneCpuCount}
+            ${Interfaces}
+            pciDriver: "igb_uio"
+          - ImageRepository: !If
+            - UseDefaultImageRepository
+            - !If
+              - PlatformIsVRouter
+              - !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/xrd/xrd-vrouter'
+              - !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/xrd/xrd-vrouter'
+            - !Ref ImageRepository
+            Interface1Config: !If
+            - XrdInterface1IPSpecified
+            - !Sub interface HundredGigE0/0/0/0 ipv4 address ${XrdInterface1IP}
+            - ""
+            Interface2Config: !If
+            - XrdInterface2IPSpecified
+            - !Sub interface HundredGigE0/0/0/1 ipv4 address ${XrdInterface2IP}
+            - ""
+            Interface3Config: !If
+            - XrdInterface3IPSpecified
+            - !Sub interface HundredGigE0/0/0/2 ipv4 address ${XrdInterface3IP}
+            - ""
+            Interface4Config: !If
+            - XrdInterface4IPSpecified
+            - !Sub interface HundredGigE0/0/0/3 ipv4 address ${XrdInterface4IP}
+            - ""
+            Interface5Config: !If
+            - XrdInterface5IPSpecified
+            - !Sub interface HundredGigE0/0/0/4 ipv4 address ${XrdInterface5IP}
+            - ""
+            Interface6Config: !If
+            - XrdInterface6IPSpecified
+            - !Sub interface HundredGigE0/0/0/5 ipv4 address ${XrdInterface6IP}
+            - ""
+            Interface7Config: !If
+            - XrdInterface7IPSpecified
+            - !Sub interface HundredGigE0/0/0/6 ipv4 address ${XrdInterface7IP}
+            - ""
+            Interface8Config: !If
+            - XrdInterface8IPSpecified
+            - !Sub interface HundredGigE0/0/0/7 ipv4 address ${XrdInterface8IP}
+            - ""
+            Interface9Config: !If
+            - XrdInterface9IPSpecified
+            - !Sub interface HundredGigE0/0/0/8 ipv4 address ${XrdInterface9IP}
+            - ""
+            Interface10Config: !If
+            - XrdInterface10IPSpecified
+            - !Sub interface HundredGigE0/0/0/9 ipv4 address ${XrdInterface10IP}
+            - ""
+            Interface11Config: !If
+            - XrdInterface11IPSpecified
+            - !Sub interface HundredGigE0/0/0/10 ipv4 address ${XrdInterface11IP}
+            - ""
+            Interface12Config: !If
+            - XrdInterface12IPSpecified
+            - !Sub interface HundredGigE0/0/0/11 ipv4 address ${XrdInterface12IP}
+            - ""
+            Interface13Config: !If
+            - XrdInterface13IPSpecified
+            - !Sub interface HundredGigE0/0/0/12 ipv4 address ${XrdInterface13IP}
+            - ""
+            Interface14Config: !If
+            - XrdInterface14IPSpecified
+            - !Sub interface HundredGigE0/0/0/13 ipv4 address ${XrdInterface14IP}
+            - ""
+            Interfaces: !If
+            - XrdInterface14Required
+            - 'interfaces: [ { type: pci, config: { last: 14 } } ]'
+            - !If
+              - XrdInterface13Required
+              - 'interfaces: [ { type: pci, config: { last: 13 } } ]'
+              - !If
+                - XrdInterface12Required
+                - 'interfaces: [ { type: pci, config: { last: 12 } } ]'
+                - !If
+                  - XrdInterface11Required
+                  - 'interfaces: [ { type: pci, config: { last: 11 } } ]'
+                  - !If
+                    - XrdInterface10Required
+                    - 'interfaces: [ { type: pci, config: { last: 10 } } ]'
+                    - !If
+                      - XrdInterface9Required
+                      - 'interfaces: [ { type: pci, config: { last: 9 } } ]'
+                      - !If
+                        - XrdInterface8Required
+                        - 'interfaces: [ { type: pci, config: { last: 8 } } ]'
+                        - !If
+                          - XrdInterface7Required
+                          - 'interfaces: [ { type: pci, config: { last: 7 } } ]'
+                          - !If
+                            - XrdInterface6Required
+                            - 'interfaces: [ { type: pci, config: { last: 6 } } ]'
+                            - !If
+                              - XrdInterface5Required
+                              - 'interfaces: [ { type: pci, config: { last: 5 } } ]'
+                              - !If
+                                - XrdInterface4Required
+                                - 'interfaces: [ { type: pci, config: { last: 4 } } ]'
+                                - !If
+                                  - XrdInterface3Required
+                                  - 'interfaces: [ { type: pci, config: { last: 3 } } ]'
+                                  - !If
+                                    - XrdInterface2Required
+                                    - 'interfaces: [ { type: pci, config: { last: 2 } } ]'
+                                    - !If
+                                      - XrdInterface1Required
+                                      - 'interfaces: [ { type: pci, config: { last: 1 } } ]'
+                                      - ""
+            HugePages: !FindInMap [VRouterInstanceTypeProperties, !Ref NodeInstanceType, HugePages]
+            CpuSet: !FindInMap [VRouterInstanceTypeProperties, !Ref NodeInstanceType, CpuSet]
+            ControlPlaneCpuCount: !FindInMap [VRouterInstanceTypeProperties, !Ref NodeInstanceType, ControlPlaneCpuCount]
+        - !Sub
+          - |
+            image:
+              repository: ${ImageRepository}
+              tag: ${ImageTag}
+              pullPolicy: Always
+            securityContext:
+              privileged: true
+            nodeSelector:
+              xrd.node: ${WorkerNodeName}
+            persistence:
+              enabled: true
+              size: "6Gi"
+              accessModes:
+              - ReadWriteOnce
+              storageClass: "gp2"
+            config:
+              # ASCII XR configuration to be applied on XR boot.
+              username: ${XrdRootUserName}
+              password: ${XrdRootPassword}
+              ascii: |
+                hostname xrd
+                logging console debugging
+                logging monitor debugging
+                ${Interface1Config}
+                ${Interface2Config}
+                ${Interface3Config}
+                ${Interface4Config}
+                ${Interface5Config}
+                ${Interface6Config}
+                ${Interface7Config}
+                ${Interface8Config}
+                ${Interface9Config}
+                ${Interface10Config}
+                ${Interface11Config}
+                ${Interface12Config}
+                ${Interface13Config}
+                ${Interface14Config}
+              asciiEveryBoot: True
+            interfaces:
+              ${Interface1}
+              ${Interface2}
+              ${Interface3}
+              ${Interface4}
+              ${Interface5}
+              ${Interface6}
+              ${Interface7}
+              ${Interface8}
+              ${Interface9}
+              ${Interface10}
+              ${Interface11}
+              ${Interface12}
+              ${Interface13}
+              ${Interface14}
+          - ImageRepository: !If
+            - UseDefaultImageRepository
+            - !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/xrd/xrd-control-plane'
+            - !Ref ImageRepository
+            Interface1Config: !If
+            - XrdInterface1IPSpecified
+            - !Sub interface GigabitEthernet0/0/0/0 ipv4 address ${XrdInterface1IP}
+            - ""
+            Interface2Config: !If
+            - XrdInterface2IPSpecified
+            - !Sub interface GigabitEthernet0/0/0/1 ipv4 address ${XrdInterface2IP}
+            - ""
+            Interface3Config: !If
+            - XrdInterface3IPSpecified
+            - !Sub interface GigabitEthernet0/0/0/2 ipv4 address ${XrdInterface3IP}
+            - ""
+            Interface4Config: !If
+            - XrdInterface4IPSpecified
+            - !Sub interface GigabitEthernet0/0/0/3 ipv4 address ${XrdInterface4IP}
+            - ""
+            Interface5Config: !If
+            - XrdInterface5IPSpecified
+            - !Sub interface GigabitEthernet0/0/0/4 ipv4 address ${XrdInterface5IP}
+            - ""
+            Interface6Config: !If
+            - XrdInterface6IPSpecified
+            - !Sub interface GigabitEthernet0/0/0/5 ipv4 address ${XrdInterface6IP}
+            - ""
+            Interface7Config: !If
+            - XrdInterface7IPSpecified
+            - !Sub interface GigabitEthernet0/0/0/6 ipv4 address ${XrdInterface7IP}
+            - ""
+            Interface8Config: !If
+            - XrdInterface8IPSpecified
+            - !Sub interface GigabitEthernet0/0/0/7 ipv4 address ${XrdInterface8IP}
+            - ""
+            Interface9Config: !If
+            - XrdInterface9IPSpecified
+            - !Sub interface GigabitEthernet0/0/0/8 ipv4 address ${XrdInterface9IP}
+            - ""
+            Interface10Config: !If
+            - XrdInterface10IPSpecified
+            - !Sub interface GigabitEthernet0/0/0/9 ipv4 address ${XrdInterface10IP}
+            - ""
+            Interface11Config: !If
+            - XrdInterface11IPSpecified
+            - !Sub interface GigabitEthernet0/0/0/10 ipv4 address ${XrdInterface11IP}
+            - ""
+            Interface12Config: !If
+            - XrdInterface12IPSpecified
+            - !Sub interface GigabitEthernet0/0/0/11 ipv4 address ${XrdInterface12IP}
+            - ""
+            Interface13Config: !If
+            - XrdInterface13IPSpecified
+            - !Sub interface GigabitEthernet0/0/0/12 ipv4 address ${XrdInterface13IP}
+            - ""
+            Interface14Config: !If
+            - XrdInterface14IPSpecified
+            - !Sub interface GigabitEthernet0/0/0/13 ipv4 address ${XrdInterface14IP}
+            - ""
+            Interface1: !If
+              - XrdInterface1Required
+              - '- { type: multus, config: { type: host-device, device: eth1 } }'
+              - '[]'
+            Interface2: !If
+              - XrdInterface2Required
+              - '- { type: multus, config: { type: host-device, device: eth2 } }'
+              - ""
+            Interface3: !If
+              - XrdInterface3Required
+              - '- { type: multus, config: { type: host-device, device: eth3 } }'
+              - ""
+            Interface4: !If
+              - XrdInterface4Required
+              - '- { type: multus, config: { type: host-device, device: eth4 } }'
+              - ""
+            Interface5: !If
+              - XrdInterface5Required
+              - '- { type: multus, config: { type: host-device, device: eth5 } }'
+              - ""
+            Interface6: !If
+              - XrdInterface6Required
+              - '- { type: multus, config: { type: host-device, device: eth6 } }'
+              - ""
+            Interface7: !If
+              - XrdInterface7Required
+              - '- { type: multus, config: { type: host-device, device: eth7 } }'
+              - ""
+            Interface8: !If
+              - XrdInterface8Required
+              - '- { type: multus, config: { type: host-device, device: eth8 } }'
+              - ""
+            Interface9: !If
+              - XrdInterface9Required
+              - '- { type: multus, config: { type: host-device, device: eth9 } }'
+              - ""
+            Interface10: !If
+              - XrdInterface10Required
+              - '- { type: multus, config: { type: host-device, device: eth10 } }'
+              - ""
+            Interface11: !If
+              - XrdInterface11Required
+              - '- { type: multus, config: { type: host-device, device: eth11 } }'
+              - ""
+            Interface12: !If
+              - XrdInterface12Required
+              - '- { type: multus, config: { type: host-device, device: eth12 } }'
+              - ""
+            Interface13: !If
+              - XrdInterface13Required
+              - '- { type: multus, config: { type: host-device, device: eth13 } }'
+              - ""
+            Interface14: !If
+              - XrdInterface14Required
+              - '- { type: multus, config: { type: host-device, device: eth14 } }'
+              - ""
+
+
+
+
+
+#Outputs:

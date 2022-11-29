@@ -1,0 +1,324 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'One click solution to deploy an example XRd application including underlying VPC stack and EKS.'
+
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        # AWSQS::Kubernetes::Helm not found during Lint.
+        - E3001
+
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: 'VPC configuration'
+      Parameters:
+      - AvailabilityZones
+
+    - Label:
+        default: 'EKS cluster configuration'
+      Parameters:
+      - EKSClusterName
+      - AdditionalEKSAdminUserArn
+      - AdditionalEKSAdminRoleArn
+      - EKSPublicAccessEndpoint
+      - RemoteAccessCIDR
+      - KubernetesVersion
+      - MultusCNIManifestURL
+
+    - Label:
+        default: 'Worker node configuration'
+      Parameters:
+      - NodeInstanceType
+      - CustomAmiId
+      - KeyPairName
+
+    - Label:
+        default: 'Application configuration'
+      Parameters:
+      - Application
+
+    - Label:
+        default: 'XRd configuration'
+      Parameters:
+      - Platform
+      - ImageRepository
+      - ImageTag
+      - HelmReleaseName
+      - XrdRootUserName
+      - XrdRootPassword
+
+    - Label:
+        default: 'Template configuration'
+      Parameters:
+      - XrdS3BucketName
+      - XrdS3BucketRegion
+      - XrdS3KeyPrefix
+
+    ParameterLabels:
+      AvailabilityZones:
+        default: 'VPC Availability Zones'
+
+      EKSClusterName:
+        default: 'EKS cluster name'
+      AdditionalEKSAdminUserArn:
+        default: 'Additional EKS admin user ARN'
+      AdditionalEKSAdminRoleArn:
+        default: 'Additional EKS admin role ARN'
+      EKSPublicAccessEndpoint:
+        default: 'EKS public access endpoint'
+      RemoteAccessCIDR:
+        default: 'EKS remote access CIDR'
+      KubernetesVersion:
+        default: 'Kubernetes version'
+      MultusCNIManifestURL:
+        default: 'Custom multus CNI manifest URL'
+
+      NodeInstanceType:
+        default: 'Worker node instance type'
+      CustomAmiId:
+        default: 'Custom worker node AMI ID'
+      KeyPairName:
+        default: 'EC2 key pair'
+
+      Application:
+        default: 'Application'
+
+      Platform:
+        default: 'XRd platform'
+      ImageRepository:
+        default: 'XRd image repository URL'
+      ImageTag:
+        default: 'XRd image tag'
+      HelmReleaseName:
+        default: 'Helm release name'
+      XrdRootUserName:
+        default: 'XR root user name'
+      XrdRootPassword:
+        default: 'XR root user password'
+
+      XrdS3BucketName:
+        default: 'XRd resource S3 bucket name'
+      XrdS3BucketRegion:
+        default: 'XRd resource S3 bucket region'
+      XrdS3KeyPrefix:
+        default: 'XRd resource S3 bucket key prefix'
+
+Parameters:
+
+  # From xrd-eks-new-vpc
+
+  AvailabilityZones:
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+    Description: 'List of precisely 2 Availability Zones to use for the subnets in the VPC. Note: The logical order is preserved.'
+
+  EKSClusterName:
+    Type: String
+    Default: 'xrd-cluster'
+    Description: 'Name for the EKS cluster.'
+
+  AdditionalEKSAdminUserArn:
+    Type: String
+    Default: ''
+    AllowedPattern: '^arn:(aws|aws-cn|aws-us-gov):iam::[0-9]{12}:.*|^$'
+    Description: '(Optional) IAM user Amazon Resource Name (ARN) to be granted administrative access to the EKS cluster.'
+
+  AdditionalEKSAdminRoleArn:
+    Type: String
+    Default: ''
+    AllowedPattern: '^arn:(aws|aws-cn|aws-us-gov):iam::[0-9]{12}:.*|^$'
+    Description: '(Optional) IAM role Amazon Resource Name (ARN) to be granted administrative access to the EKS cluster.'
+
+  EKSPublicAccessEndpoint:
+    Type: String
+    Default: Disabled
+    AllowedValues: [Enabled, Disabled]
+    Description: 'Chose Enabled to allow access to the Kubernetes API endpoint from outside the VPC.'
+
+  RemoteAccessCIDR:
+    Type: String
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+    ConstraintDescription: 'CIDR block parameter must be in the form x.x.x.x/x'
+    Description: 'If public access is enabled, the external CIDR IP range that is permitted to access the instances. We recommend that you set this value to a trusted IP range.'
+
+  KubernetesVersion:
+    Type: String
+    Default: '1.22'
+    AllowedValues: [ '1.22' ]
+    Description: 'Kubernetes control plane version.'
+
+  MultusCNIManifestURL:
+    Type: String
+    Default: 'https://raw.githubusercontent.com/aws/amazon-vpc-cni-k8s/master/config/multus/v3.7.2-eksbuild.1/aws-k8s-multus.yaml'
+    Description: 'URL containing multus manifest (default v3.7.2).'
+
+  KeyPairName:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    Description: 'An EC2 key pair, which allows you to securely connect to your instance after it launches.'
+
+  # Platform (only applicable for Singleton)
+  Platform:
+    Type: String
+    AllowedValues: [VRouter, ControlPlane]
+    Description: "(Only applicable for Singleton Application) XRd platform to run - must match the supplied image repository"
+
+  # These are required while the CF templates are manually uploaded to S3.
+  XrdS3BucketName:
+    Type: String
+    Description: 'Use the "Bucket Name" output from publish-templates.sh'
+  XrdS3KeyPrefix:
+    Type: String
+    Description: 'Use the "Bucket Key Prefix" output from publish-templates.sh'
+  XrdS3BucketRegion:
+    Type: String
+    Description: 'Use the "Bucket Region" output from publish-templates.sh'
+
+  # From xrd-overlay-example-existing-vpc
+
+  CustomAmiId:
+    Type: String
+    Default: ''
+    Description: '(Optional) AMI ID to use for cluster worker nodes.'
+  NodeInstanceType:
+    Type: String
+    Default: 'm5n.2xlarge'
+    AllowedValues:
+      - 'm5.2xlarge'
+      - 'm5.24xlarge'
+      - 'm5n.2xlarge'
+      - 'm5n.24xlarge'
+    ConstraintDescription: 'Must be a supported EC2 instance type'
+    Description: 'Type of EC2 instance for cluster worker nodes.'
+
+  Application:
+    Type: String
+    Default: 'Singleton'
+    AllowedValues: [ 'Singleton', 'Overlay' ]
+    Description: 'Choose which example application to deploy - either single XRd instance or two router overlay topology.'
+
+  ImageRepository:
+    Type: String
+    Default: ''
+    Description: "(Optional) XRd container image repository. If not specified, the running account's private ECR repo is used."
+  ImageTag:
+    Type: String
+    Description: 'XRd container image tag.'
+    Default: 'latest'
+  HelmReleaseName:
+    Type: String
+    Default: 'xrd-example'
+    Description: 'Helm release name.'
+
+  XrdRootUserName:
+    Type: String
+    Description: 'Root username for the XRd instance.'
+  XrdRootPassword:
+    Type: String
+    Description: 'Root password for the XRd instance.'
+
+
+Conditions:
+  SingletonApplication: !Equals [ !Ref Application, 'Singleton' ]
+
+Mappings:
+  HelmRepositories:
+    # @@@ check links when published
+    Overlay:
+      Url: 'https://ios-xr.github.io/xrd-eks/helm'
+    Singleton:
+      Url: 'https://ios-xr.github.io/xrd-helm'
+
+Resources:
+  EksAndVpcStack:
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-eks-new-vpc-cf.yaml
+      Parameters:
+        AvailabilityZones: !Join [',', !Ref AvailabilityZones]
+        RemoteAccessCIDR: !Ref RemoteAccessCIDR
+        EKSPublicAccessEndpoint: !Ref EKSPublicAccessEndpoint
+        AdditionalEKSAdminUserArn: !Ref AdditionalEKSAdminUserArn
+        AdditionalEKSAdminRoleArn: !Ref AdditionalEKSAdminRoleArn
+        KeyPairName: !Ref KeyPairName
+        EKSClusterName: !Ref EKSClusterName
+        MultusCNI: Enabled
+        MultusCNIManifestURL: !Ref MultusCNIManifestURL
+        KubernetesVersion: !Ref KubernetesVersion
+        XrdS3BucketName: !Ref XrdS3BucketName
+        XrdS3KeyPrefix: !Ref XrdS3KeyPrefix
+        XrdS3BucketRegion: !Ref XrdS3BucketRegion
+
+  ApplicationStack:
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub
+        - https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/${TemplateName}.yaml
+        - TemplateName: !If [SingletonApplication, xrd-singleton-existing-eks-cf, xrd-overlay-example-existing-eks-cf ]
+      Parameters:
+        KeyPairName: !Ref KeyPairName
+        CustomAmiId: !Ref CustomAmiId
+        NodeInstanceType: !Ref NodeInstanceType
+        EKSClusterName: !Ref EKSClusterName
+        SubnetID: !GetAtt EksAndVpcStack.Outputs.PrivateSubnet1ID
+        XrdS3BucketName: !Ref XrdS3BucketName
+        XrdS3KeyPrefix: !Ref XrdS3KeyPrefix
+        XrdS3BucketRegion: !Ref XrdS3BucketRegion
+        Platform: !If
+          - SingletonApplication
+          - !Ref Platform
+          - !Ref AWS::NoValue
+        ImageRepository: !Ref ImageRepository
+        ImageTag: !Ref ImageTag
+        HelmRepository: !FindInMap ["HelmRepositories", !Ref Application, "Url"]
+        HelmReleaseName: !Ref HelmReleaseName
+        XrdRootUserName: !Ref XrdRootUserName
+        XrdRootPassword: !Ref XrdRootPassword
+
+
+Outputs:
+  VPCID:
+    Description: 'VPC ID'
+    Value: !GetAtt EksAndVpcStack.Outputs.VPCID
+
+  # This application just uses the first private subnet ID
+  PrivateSubnetID:
+    Description: 'Private subnet within the primary (first) AZ'
+    Value: !GetAtt EksAndVpcStack.Outputs.PrivateSubnet1ID
+
+  # This application just uses the first public subnet ID
+  PublicSubnetID:
+    Description: 'Public subnet within the primary (first) AZ'
+    Value: !GetAtt EksAndVpcStack.Outputs.PublicSubnet1ID
+
+  XrdSubnet1ID:
+    Description: '1st XRd subnet'
+    Value: !GetAtt EksAndVpcStack.Outputs.XrdSubnet1ID
+
+  XrdSubnet2ID:
+    Description: '2nd XRd subnet'
+    Value: !GetAtt EksAndVpcStack.Outputs.XrdSubnet2ID
+
+  XrdSubnet3ID:
+    Description: '3rd XRd subnet'
+    Value: !GetAtt EksAndVpcStack.Outputs.XrdSubnet3ID
+
+  XrdSubnet4ID:
+    Description: '4th XRd subnet'
+    Value: !GetAtt EksAndVpcStack.Outputs.XrdSubnet4ID
+
+  EKSClusterName:
+    Value: !GetAtt EksAndVpcStack.Outputs.EKSClusterName
+  BastionIP:
+    Value: !GetAtt EksAndVpcStack.Outputs.BastionIP
+  BastionSecurityGroup:
+    Value: !GetAtt EksAndVpcStack.Outputs.BastionSecurityGroup
+  NodeGroupSecurityGroup:
+    Value: !GetAtt EksAndVpcStack.Outputs.NodeGroupSecurityGroup
+  ControlPlaneSecurityGroup:
+    Value: !GetAtt EksAndVpcStack.Outputs.ControlPlaneSecurityGroup
+  OIDCIssuerURL:
+    Value: !GetAtt EksAndVpcStack.Outputs.OIDCIssuerURL

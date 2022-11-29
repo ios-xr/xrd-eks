@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+show_help() {
+    >&2 echo "create_stack.sh - Create an example XRd CF stack"
+    >&2 echo ""
+    >&2 echo "Usage: create_stack.sh -u XR_USERNAME -p XR_PASSWORD -k EC2_KEY_PAIR [-a CUSTOM_AMI_ID]"
+}
+
+# Parse the arguments
+while [ $# -gt 0 ]; do
+  case $1 in
+    -u|--username )
+      XR_USERNAME="$2"
+      shift
+      ;;
+    -p|--password )
+      XR_PASSWORD="$2"
+      shift
+      ;;
+    -k|--key-pair )
+      KEY_PAIR_NAME="$2"
+      shift
+      ;;
+    -a|--custom-ami )
+      CUSTOM_AMI_ID="$2"
+      shift
+      ;;
+    -h|--help )
+      show_help
+      exit 255
+      ;;
+  esac
+  shift
+done
+
+ERROR=""
+if [ -z "${XR_USERNAME}" ]; then
+  >&2 echo "XR username (-u|--username) must be specified"
+  ERROR=1
+fi
+if [ -z "${XR_PASSWORD}" ]; then
+  >&2 echo "XR password (-p|--password) must be specified"
+  ERROR=1
+fi
+if [ -z "${KEY_PAIR_NAME}" ]; then
+  >&2 echo "EC2 key pair (-k|--key-pair) must be specified"
+  ERROR=1
+fi
+
+if [ -n "${ERROR}" ]; then
+  >&2 echo ""
+  show_help
+  exit 1
+fi
+
+# Create a CloudFormation stack.
+# https://awscli.amazonaws.com/v2/documentation/api/latest/reference/cloudformation/create-stack.html
+APPLICATION=${APPLICATION:-"Overlay"}
+PLATFORM=${PLATFORM:-"VRouter"}
+STACK_NAME=${STACK_NAME:-xrd-${APPLICATION}}
+TEMPLATE_NAME=${TEMPLATE_NAME:-xrd-example-cf.yaml}
+
+ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+BUCKET_NAME=${BUCKET_NAME:-"${ACCOUNT_ID}-xrd-quickstart"}
+AWS_REGION=${AWS_REGION:-$(aws configure get region)}
+
+BUCKET_REGION=${BUCKET_REGION:-${AWS_REGION}}
+BUCKET_KEY_PREFIX=${BUCKET_KEY_PREFIX:-"xrd-eks/"}
+
+AVAILABILITY_ZONES=${AVAILABILITY_ZONES:-"$(aws ec2 describe-availability-zones --query AvailabilityZones[0:2].ZoneName --output text | sed -e 's/[[:space:]][[:space:]]*/,/g')"}
+
+BUCKET_URL_PREFIX="https://${BUCKET_NAME}.s3.${BUCKET_REGION}.amazonaws.com/${BUCKET_KEY_PREFIX}"
+
+TEMPLATE_URL="${BUCKET_URL_PREFIX}cf-templates/${TEMPLATE_NAME}"
+CAPABILITIES="CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
+CLUSTER_NAME="xrd-cluster"
+KEY_PAIR_NAME="${KEY_PAIR_NAME:-${USER}}"
+
+function add_parameter {
+    KEY=$1
+    VALUE=$2
+    PARAMETERS="${PARAMETERS} ParameterKey=$KEY,ParameterValue=$VALUE"
+}
+
+PARAMETERS=""
+add_parameter XrdS3BucketName "${BUCKET_NAME}"
+add_parameter XrdS3BucketRegion "${BUCKET_REGION}"
+add_parameter XrdS3KeyPrefix "${BUCKET_KEY_PREFIX}"
+
+add_parameter EKSClusterName "${CLUSTER_NAME}"
+add_parameter AvailabilityZones "\"${AVAILABILITY_ZONES}\""
+add_parameter RemoteAccessCIDR "0.0.0.0/0"
+add_parameter EKSPublicAccessEndpoint "Enabled"
+add_parameter KeyPairName "${KEY_PAIR_NAME}"
+
+add_parameter NodeInstanceType "m5.2xlarge"
+
+add_parameter Application "${APPLICATION}"
+add_parameter Platform "${PLATFORM}"
+add_parameter XrdRootUserName "${XR_USERNAME}"
+add_parameter XrdRootPassword "${XR_PASSWORD}"
+
+if [ -n "${CUSTOM_AMI_ID}" ]; then
+    add_parameter CustomAmiId "${CUSTOM_AMI_ID}"
+fi
+
+set -x
+
+aws cloudformation delete-stack --stack-name "${STACK_NAME}" || true
+aws cloudformation wait stack-delete-complete --stack-name "${STACK_NAME}" || true
+
+# shellcheck disable=SC2086
+# Relying on word splitting to pass ${PARAMETERS} and CAPABILITIES as individual args.
+aws cloudformation create-stack --stack-name "${STACK_NAME}" \
+                                --template-url "${TEMPLATE_URL}" \
+                                --disable-rollback \
+                                --capabilities ${CAPABILITIES} \
+                                --parameters ${PARAMETERS}
+
+# Stack creation can sometimes take > 1 hour which is the timeout interval -
+# so run twice if needed.
+aws cloudformation wait stack-create-complete --stack-name "${STACK_NAME}" || aws cloudformation wait stack-create-complete --stack-name "${STACK_NAME}"
+aws cloudformation list-stacks --query "StackSummaries[?StackName==\`${STACK_NAME}\` && StackStatus!=\`DELETE_COMPLETE\`].{Name: StackName, Status: StackStatus, Id: StackId}"
+
+aws eks update-kubeconfig --name "${CLUSTER_NAME}"

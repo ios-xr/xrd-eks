@@ -1,0 +1,291 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Deploy 2 XRd routers connected via an overlay constructed using GRE, IS-IS and L3VPN.
+
+Parameters:
+  KeyPairName:
+    Description: Name of an existing EC2 key pair. All instances will launch with this key pair. Ignored if "Custom launch template" is provided. If left blank, no key pair will be associated with the nodes.
+    Type: String
+    Default: ""
+  CustomAmiId:
+    Type: String
+    Default: ""
+    Description: AMI id of image suitable for running XRd vRouter
+  NodeInstanceType:
+    Default: m5n.2xlarge
+    AllowedValues:
+      - m5.2xlarge
+      - m5.24xlarge
+      - m5n.2xlarge
+      - m5n.24xlarge
+    ConstraintDescription: Must be a supported EC2 instance type
+    Description: Type of EC2 instance for the node instances.
+    Type: String
+  EKSClusterName:
+    Description: Name of the EKS cluster to join.
+    Type: String
+  SubnetID:
+    Description: ID of subnet for the primary (K8S) ENI for XRd worker nodes (e.g.,subnet-a0246123).
+    Type: AWS::EC2::Subnet::Id
+
+  NodeAIP:
+    Default: "10.0.101.11"
+    Type: String
+    Description: Host IP address for Node A.
+  NodeBIP:
+    Default: "10.0.101.12"
+    Type: String
+    Description: Host IP address for Node B.
+  NodeCIP:
+    Default: "10.0.101.13"
+    Type: String
+    Description: Host IP address for Node C.
+
+  XrdRootUserName:
+    Type: String
+    Description: Root username for the XRd instance.
+  XrdRootPassword:
+    Type: String
+    Description: Root password for the XRd instance
+
+  ### These parameters need to match values within XRd config in helm values -
+  ###  not really expecting them to be changed.
+  AccessASubnetTagValue:
+    Default: 1
+    Type: String
+    Description: Subnet for access / customer facing link attached to XRdA.
+  XrdAAccessIP:
+    Default: "10.0.1.11/24"
+    Type: String
+    Description: IP address of XRdA on customer link
+  HostAAccessIP:
+    Default: "10.0.1.10/24"
+    Type: String
+    Description: IP address of host attached to XRdA.
+  Trunk1SubnetTagValue:
+    Default: 2
+    Type: String
+    Description: Subnet for first trunk interface between XRd instances.
+  XrdATrunk1IP:
+    Default: "10.0.2.11/24"
+    Type: String
+    Description: IP address for XRdA on first trunk interface.
+  XrdBTrunk1IP:
+    Default: "10.0.2.12/24"
+    Type: String
+    Description: IP address for XRdB on first trunk interface.
+  Trunk2SubnetTagValue:
+    Default: 3
+    Type: String
+    Description: Subnet for second trunk interface between XRd instances.
+  XrdATrunk2IP:
+    Default: "10.0.3.11/24"
+    Type: String
+    Description: IP address for XRdA on second trunk interface.
+  XrdBTrunk2IP:
+    Default: "10.0.3.12/24"
+    Type: String
+    Description: IP address for XRdB on second trunk interface.
+  AccessBSubnetTagValue:
+    Default: 4
+    Type: String
+    Description: Subnet for access / customer facing link attached to XRdB.
+  XrdBAccessIP:
+    Default: "10.0.4.12/24"
+    Type: String
+    Description: IP address of XRdA on customer link
+  HostBAccessIP:
+    Default: "10.0.4.10/24"
+    Type: String
+    Description: IP address of host attached to XRdB.
+
+  XrdS3BucketName:
+    # Default: TBD
+    Type: String
+  XrdS3KeyPrefix:
+    # Default: TBD
+    Type: String
+  XrdS3BucketRegion:
+    # Default: TBD
+    Type: String
+
+  ImageRepository:
+    Type: String
+    Default: ""
+    Description: "(Optional) Repository with XRd container image.  If not specified account's private ECR repo is used"
+  ImageTag:
+    Type: String
+    Description: "Image tag.  If not specified latest will be used"
+    Default: "latest"
+  HelmRepository:
+    Type: String
+    Description: "Helm repository"
+  HelmChartName:
+    Type: String
+    Description: "Helm chart name"
+    Default: ""
+  HelmChartVersion:
+    Type: String
+    Description: "Helm chart version.  If not specified latest version will be used"
+    Default: ""
+  HelmReleaseName:
+    Type: String
+    Description: "Helm release name.  If not specified aws-overlay-example will be used"
+    Default: "aws-overlay-example"
+  SkipNodeStack:
+    Type: String
+    AllowedValues: [ "Yes", "No" ]
+    Default: "No"
+    Description: Specify Yes to avoid installing the nodes and just install the helm chart
+  SkipHelmRelease:
+    Type: String
+    AllowedValues: [ "Yes", "No" ]
+    Default: "No"
+    Description: Specify Yes to avoid installing the helm chart and just create the underlying infrastructure
+
+
+Conditions:
+  HelmChartNameSpecified: !Not [ !Equals [ !Ref HelmChartName, '' ] ]
+  HelmReleaseRequired: !Equals [ !Ref SkipHelmRelease, 'No']
+  NodeStackRequired: !Equals [ !Ref SkipNodeStack, 'No']
+  UseDefaultImageRepository: !Equals [ !Ref ImageRepository, "" ]
+
+Resources:
+
+  VPCID:
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand:  ec2 describe-subnets --subnet-ids subnet-0590a9491fa8e95a7 --query Subnets[0]
+      IdField: 'VpcId'
+
+  NodeA:
+    Condition: NodeStackRequired
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-eks-node-cf.yaml
+      Parameters:
+        KeyPairName: !Ref KeyPairName
+        CustomAmiId: !Ref CustomAmiId
+        SubnetID: !Ref SubnetID
+        NodeInstanceType: !Ref NodeInstanceType
+        EKSClusterName: !Ref EKSClusterName
+        WorkerNodeName: "nodeA"
+        NodeIP: !Ref NodeAIP
+
+        XrdInterface1SubnetTagValue: !Ref AccessASubnetTagValue
+        XrdInterface1IP: !Select [ 0, !Split [ '/', !Ref XrdAAccessIP ]]
+
+        XrdInterface2SubnetTagValue: !Ref Trunk1SubnetTagValue
+        XrdInterface2IP: !Select [ 0, !Split [ '/', !Ref XrdATrunk1IP ]]
+
+        XrdInterface3SubnetTagValue: !Ref Trunk2SubnetTagValue
+        XrdInterface3IP: !Select [ 0, !Split [ '/', !Ref XrdATrunk2IP ]]
+
+        XrdS3BucketName: !Ref XrdS3BucketName
+        XrdS3KeyPrefix: !Ref XrdS3KeyPrefix
+        XrdS3BucketRegion: !Ref XrdS3BucketRegion
+
+  NodeB:
+    Condition: NodeStackRequired
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-eks-node-cf.yaml
+      Parameters:
+        KeyPairName: !Ref KeyPairName
+        CustomAmiId: !Ref CustomAmiId
+        SubnetID: !Ref SubnetID
+        NodeInstanceType: !Ref NodeInstanceType
+        EKSClusterName: !Ref EKSClusterName
+        WorkerNodeName: "nodeB"
+        NodeIP: !Ref NodeBIP
+
+        XrdInterface1SubnetTagValue: !Ref AccessBSubnetTagValue
+        XrdInterface1IP: !Select [ 0, !Split [ '/', !Ref XrdBAccessIP ]]
+
+        XrdInterface2SubnetTagValue: !Ref Trunk1SubnetTagValue
+        XrdInterface2IP: !Select [ 0, !Split [ '/', !Ref XrdBTrunk1IP ]]
+
+        XrdInterface3SubnetTagValue: !Ref Trunk2SubnetTagValue
+        XrdInterface3IP: !Select [ 0, !Split [ '/', !Ref XrdBTrunk2IP ]]
+
+        XrdS3BucketName: !Ref XrdS3BucketName
+        XrdS3KeyPrefix: !Ref XrdS3KeyPrefix
+        XrdS3BucketRegion: !Ref XrdS3BucketRegion
+
+  NodeC:
+    Condition: NodeStackRequired
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-eks-node-cf.yaml
+      Parameters:
+        KeyPairName: !Ref KeyPairName
+        CustomAmiId: !Ref CustomAmiId
+        SubnetID: !Ref SubnetID
+        NodeInstanceType: !Ref NodeInstanceType
+        EKSClusterName: !Ref EKSClusterName
+        WorkerNodeName: "nodeC"
+        NodeIP: !Ref NodeCIP
+
+        XrdInterface1SubnetTagValue: !Ref AccessASubnetTagValue
+        XrdInterface1IP: !Select [ 0, !Split [ '/', !Ref HostAAccessIP ]]
+
+        XrdInterface2SubnetTagValue: !Ref AccessBSubnetTagValue
+        XrdInterface2IP: !Select [ 0, !Split [ '/', !Ref HostBAccessIP ]]
+
+        XrdS3BucketName: !Ref XrdS3BucketName
+        XrdS3KeyPrefix: !Ref XrdS3KeyPrefix
+        XrdS3BucketRegion: !Ref XrdS3BucketRegion
+
+  Release:
+    Condition: HelmReleaseRequired
+    Type: "AWSQS::Kubernetes::Helm"
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            # Custom resource AWSQS::Kubernetes::Helm not found during Lint.
+            - E3001
+            # See 'HackNode?DependsOn' below
+            - W1019
+    Properties:
+      ClusterID: !Ref EKSClusterName
+      Name: !Ref HelmReleaseName
+      Repository: !Ref HelmRepository
+      Version: !Ref HelmChartVersion
+      Chart: !If [ HelmChartNameSpecified, !Ref HelmChartName, aws-overlay-example ]
+      ValueYaml: !Sub
+      - |
+        xrd1:
+          image:
+            repository: ${ImageRepository}
+            tag: ${ImageTag}
+          config:
+            # ASCII XR configuration to be applied on XR boot.
+            username: ${XrdRootUserName}
+            password: ${XrdRootPassword}
+        xrd2:
+          image:
+            repository: ${ImageRepository}
+            tag: ${ImageTag}
+          config:
+            # ASCII XR configuration to be applied on XR boot.
+            username: ${XrdRootUserName}
+            password: ${XrdRootPassword}
+
+      - # Hack to make dependency on nodestack conditional on the input parameter.
+        ImageRepository: !If
+        - UseDefaultImageRepository
+        - !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/xrd/xrd-vrouter'
+        - !Ref ImageRepository
+
+        HackNodeADependsOn: !If [ NodeStackRequired, !GetAtt NodeA.Outputs.Instance, '']
+        HackNodeBDependsOn: !If [ NodeStackRequired, !GetAtt NodeB.Outputs.Instance, '']
+        HackNodeCDependsOn: !If [ NodeStackRequired, !GetAtt NodeC.Outputs.Instance, '']
+
+#Outputs:

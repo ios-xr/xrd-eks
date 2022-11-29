@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+#
+# Publish an S3 bucket containing the following from this repository:
+#  - CloudFormation templates
+#  - AMI assets.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+BUCKET_NAME=${BUCKET_NAME:-"${ACCOUNT_ID}-xrd-quickstart"}
+BUCKET_KEY_PREFIX=${BUCKET_KEY_PREFIX:-"xrd-eks/"}
+
+AWS_REGION=${AWS_REGION:-$(aws configure get region)}
+
+CF_DIR=cf-templates
+AMI_ASSETS_DIR=ami_assets
+
+create_bucket() {
+    if [ "${AWS_REGION}" != "us-east-1" ]; then
+        aws s3api create-bucket --bucket "${BUCKET_NAME}" --create-bucket-configuration "{ \"LocationConstraint\": \"${AWS_REGION}\" }"
+    else
+        aws s3api create-bucket --bucket "${BUCKET_NAME}"
+    fi
+
+    POLICY='{
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": "s3:GetObject",
+                "Resource": "arn:aws:s3:::'"${BUCKET_NAME}"'/'"${BUCKET_KEY_PREFIX}"''"${CF_DIR}"'/*"
+            },
+            {
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": "s3:GetObject",
+                "Resource": "arn:aws:s3:::'"${BUCKET_NAME}"'/'"${BUCKET_KEY_PREFIX}"''"${AMI_ASSETS_DIR}"'/*"
+            }
+        ]
+    }'
+
+    aws s3api put-public-access-block --bucket "${BUCKET_NAME}" --public-access-block-configuration "BlockPublicPolicy=false"
+    aws s3api put-bucket-policy --bucket "${BUCKET_NAME}" --policy "${POLICY}"
+}
+
+sync_dir() {
+    local DIR=$1
+    aws s3 sync --delete "./${DIR}/" "s3://${BUCKET_NAME}/${BUCKET_KEY_PREFIX}${DIR}/"
+}
+
+echo "Creating bucket ${BUCKET_NAME}..."
+create_bucket
+
+echo "Syncing CF templates to bucket..."
+sync_dir ${CF_DIR}
+
+echo "Syncing AMI assets to bucket..."
+sync_dir ${AMI_ASSETS_DIR}
+
+# Output the details to be used in the CF stacks.
+echo ""
+echo "Successfully populated S3 bucket"
+echo "Use the following values in your XRd CloudFormation stack:"
+echo "  XRd resource S3 bucket name: ${BUCKET_NAME}"
+echo "  XRd resource S3 bucket region: ${AWS_REGION}"
+echo "  XRd resource S3 bucket key prefix: ${BUCKET_KEY_PREFIX}"

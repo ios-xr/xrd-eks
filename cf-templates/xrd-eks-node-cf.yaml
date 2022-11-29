@@ -1,0 +1,541 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: EKS worker node with additional interfaces suitable for hosting XRd vRouter
+
+Metadata:
+  LintSpellExclude:
+    - SGID
+Parameters:
+  KeyPairName:
+    Description: Name of an existing EC2 key pair. All instances will launch with this key pair. Ignored if "Custom launch template" is provided. If left blank, no key pair will be associated with the nodes.
+    Type: String
+    Default: ""
+  CustomAmiId:
+    Type: String
+    Default: ""
+    Description: AMI id of image suitable for running XRd vRouter
+  NodeInstanceType:
+    Default: m5n.2xlarge
+    AllowedValues:
+      - m5.2xlarge
+      - m5.24xlarge
+      - m5n.2xlarge
+      - m5n.24xlarge
+    ConstraintDescription: Must be a supported EC2 instance type
+    Description: Type of EC2 instance for the node instances.
+    Type: String
+  Platform:
+    Type: String
+    AllowedValues: [ "VRouter", "ControlPlane" ]
+    Default: "VRouter"
+    Description: Which XRd platform to deploy - XRd vRouter or XRd Control Plane
+  NodeVolumeSize:
+    # Increased to match Matt's initial template.
+    Default: "30"
+    Description: Size for node volumes.
+    Type: String
+  HugePagesGB:
+    Default: ""
+    Type: String
+    Description: "(Optional) Huge page allocation on machine.  Default is 3 Gb.  Ignored if platform is ControlPlane or CustomAmiId provided."
+  IsolatedCores:
+    Default: ""
+    Type: String
+    Description: "(Optional) Isolated cores on machine, e.g. '1, 4-5'.  If not specified no cores are isolated. Ignored if platform is ControlPlane or CustomAmiId provided."
+  EKSClusterName:
+    Description: Name of the EKS cluster to join.
+    Type: String
+  HttpProxy:
+    Type: String
+    Default: ""
+    Description: (Optional) Specify the host name for an HTTP proxy to use for outbound internet access.
+  Labels:
+   Default: ""
+   Type: String
+   Description: (Optional) Comma separated list of <key>=<value> pairs representing node labels to assign to the node group. Ignored if "Custom launch template" is provided.
+  Taints:
+    Default: ""
+    Type: String
+    Description: (Optional) Comma separated list of <key>=<value>:<effect> representing node taints to assign to the node group. Ignored if "Custom launch template" is provided.
+  WorkerNodeName:
+    Type: String
+    Description: Name of the node - added as a K8S tag and provides target for the XRd instance.
+  SubnetID:
+    Description: ID of subnet for the primary (K8S) ENI for XRd worker nodes (e.g.,subnet-a0246123).
+    Type: AWS::EC2::Subnet::Id
+  NodeIP:
+    Type: String
+    Description: IP address for node.
+  XrdInterface1IP:
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for first XRd interface
+  XrdInterface1SubnetID:
+    Default: ""
+    Type: String # AWS::EC2::Subnet::Id
+    Description: Subnet for first XRd interface.
+  XrdInterface1SubnetTagValue:
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for first XRd interface
+  XrdInterface2IP:
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for second XRd interface
+  XrdInterface2SubnetID:
+    Default: ""
+    Type: String # AWS::EC2::Subnet::Id
+    Description: Subnet for second XRd interface.
+  XrdInterface2SubnetTagValue:
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for second XRd interface
+  XrdInterface3IP:
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 3rd XRd interface
+  XrdInterface3SubnetID:
+    Default: ""
+    Type: String # AWS::EC2::Subnet::Id
+    Description: Subnet for third XRd interface.
+  XrdInterface3SubnetTagValue:
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for third XRd interface
+  XrdInterface4IP:
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 4th XRd interface
+  XrdInterface4SubnetID:
+    Default: ""
+    Type: String # AWS::EC2::Subnet::Id
+    Description: Subnet for 4th XRd interface.
+  XrdInterface4SubnetTagValue:
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 4th XRd interface
+  XrdInterface5IP:
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 5th XRd interface
+  XrdInterface5SubnetID:
+    Default: ""
+    Type: String # AWS::EC2::Subnet::Id
+    Description: Subnet for 5th XRd interface.
+  XrdInterface5SubnetTagValue:
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 5th XRd interface
+  XrdInterface6IP:
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 6th XRd interface
+  XrdInterface6SubnetID:
+    Default: ""
+    Type: String # AWS::EC2::Subnet::Id
+    Description: Subnet for 6th XRd interface.
+  XrdInterface6SubnetTagValue:
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 6th XRd interface
+  XrdInterface7IP:
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 7th XRd interface
+  XrdInterface7SubnetID:
+    Default: ""
+    Type: String # AWS::EC2::Subnet::Id
+    Description: Subnet for 7th XRd interface.
+  XrdInterface7SubnetTagValue:
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 7th XRd interface
+  XrdInterface8IP:
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 8th XRd interface
+  XrdInterface8SubnetID:
+    Default: ""
+    Type: String # AWS::EC2::Subnet::Id
+    Description: Subnet for 8th XRd interface.
+  XrdInterface8SubnetTagValue:
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 8th XRd interface
+  XrdInterface9IP:
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 9th XRd interface
+  XrdInterface9SubnetID:
+    Default: ""
+    Type: String # AWS::EC2::Subnet::Id
+    Description: Subnet for 9th XRd interface.
+  XrdInterface9SubnetTagValue:
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 9th XRd interface
+  XrdInterface10IP:
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 10th XRd interface
+  XrdInterface10SubnetID:
+    Default: ""
+    Type: String # AWS::EC2::Subnet::Id
+    Description: Subnet for 10th XRd interface.
+  XrdInterface10SubnetTagValue:
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 10th XRd interface
+  XrdInterface11IP:
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 11th XRd interface
+  XrdInterface11SubnetID:
+    Default: ""
+    Type: String # AWS::EC2::Subnet::Id
+    Description: Subnet for 11th XRd interface.
+  XrdInterface11SubnetTagValue:
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 11th XRd interface
+  XrdInterface12IP:
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 12th XRd interface
+  XrdInterface12SubnetID:
+    Default: ""
+    Type: String # AWS::EC2::Subnet::Id
+    Description: Subnet for 12th XRd interface.
+  XrdInterface12SubnetTagValue:
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 12th XRd interface
+  XrdInterface13IP:
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 13th XRd interface
+  XrdInterface13SubnetID:
+    Default: ""
+    Type: String # AWS::EC2::Subnet::Id
+    Description: Subnet for 13th XRd interface.
+  XrdInterface13SubnetTagValue:
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 13th XRd interface
+  XrdInterface14IP:
+    Default: ""
+    Type: String
+    Description: (Optional) IP address for 14th XRd interface
+  XrdInterface14SubnetID:
+    Default: ""
+    Type: String # AWS::EC2::Subnet::Id
+    Description: Subnet for 14th XRd interface.
+  XrdInterface14SubnetTagValue:
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for 14th XRd interface
+
+  XrdS3BucketName:
+    # Default: TBD
+    Type: String
+  XrdS3KeyPrefix:
+    # Default: TBD
+    Type: String
+  XrdS3BucketRegion:
+    # Default: TBD
+    Type: String
+
+Conditions:
+  # Interface attachment needs to be serialized to ensure the interfaces are
+  # attached to the instances in a deterministic order, and so the PCI IDs are
+  # ascending (and for non XRd/DPDK applications linux interface names are
+  # deterministic).
+  # Whilst in principle the template could accept any subset of interfaces
+  # {1,2,3,4}, the number of combinations becomes very high to encode - so
+  # require the first N.
+  XrdInterface1Required: !Not [ !Equals [ !Ref XrdInterface1IP, '' ] ]
+  XrdInterface2Required: !And [ !Condition XrdInterface1Required, !Not [ !Equals [ !Ref XrdInterface2IP, '' ] ] ]
+  XrdInterface3Required: !And [ !Condition XrdInterface2Required, !Not [ !Equals [ !Ref XrdInterface3IP, '' ] ] ]
+  XrdInterface4Required: !And [ !Condition XrdInterface3Required, !Not [ !Equals [ !Ref XrdInterface4IP, '' ] ] ]
+  XrdInterface5Required: !And [ !Condition XrdInterface4Required, !Not [ !Equals [ !Ref XrdInterface5IP, '' ] ] ]
+  XrdInterface6Required: !And [ !Condition XrdInterface5Required, !Not [ !Equals [ !Ref XrdInterface6IP, '' ] ] ]
+  XrdInterface7Required: !And [ !Condition XrdInterface6Required, !Not [ !Equals [ !Ref XrdInterface7IP, '' ] ] ]
+  XrdInterface8Required: !And [ !Condition XrdInterface7Required, !Not [ !Equals [ !Ref XrdInterface8IP, '' ] ] ]
+  XrdInterface9Required: !And [ !Condition XrdInterface8Required, !Not [ !Equals [ !Ref XrdInterface9IP, '' ] ] ]
+  XrdInterface10Required: !And [ !Condition XrdInterface9Required, !Not [ !Equals [ !Ref XrdInterface10IP, '' ] ] ]
+  XrdInterface11Required: !And [ !Condition XrdInterface10Required, !Not [ !Equals [ !Ref XrdInterface11IP, '' ] ] ]
+  XrdInterface12Required: !And [ !Condition XrdInterface11Required, !Not [ !Equals [ !Ref XrdInterface12IP, '' ] ] ]
+  XrdInterface13Required: !And [ !Condition XrdInterface12Required, !Not [ !Equals [ !Ref XrdInterface13IP, '' ] ] ]
+  XrdInterface14Required: !And [ !Condition XrdInterface13Required, !Not [ !Equals [ !Ref XrdInterface14IP, '' ] ] ]
+Resources:
+  VPCID:
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand: !Sub "ec2 describe-subnets --subnet-ids ${SubnetID} --query 'Subnets[0].{VpcId: VpcId}'"
+      IdField: 'VpcId'
+
+  ClusterNodeSecurityGroup:
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand: !Sub "eks describe-cluster --name ${EKSClusterName} --query '{SGID: cluster.resourcesVpcConfig.clusterSecurityGroupId}'"
+      IdField: 'SGID'
+  CleanupSecurityGroupDependencies:
+    Type: Custom::Cleanup
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-CleanupSecurityGroupDependencies'
+      SecurityGroups: !Ref ClusterNodeSecurityGroup
+
+  LaunchTemplate:
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-eks-node-launch-template-cf.yaml
+      Parameters:
+        KeyPairName: !Ref KeyPairName
+        CustomAmiId: !Ref CustomAmiId
+        SubnetID: !Ref SubnetID
+        NodeInstanceType: !Ref NodeInstanceType
+        NodeVolumeSize: !Ref NodeVolumeSize
+        EKSClusterName: !Ref EKSClusterName
+        HttpProxy: !Ref HttpProxy
+        Labels: !Sub "xrd.node=${WorkerNodeName} ${Labels}"
+        Taints: !Ref Taints
+        NodeSecurityGroupId: !Ref ClusterNodeSecurityGroup
+        Platform: !Ref Platform
+        HugePagesGB: !Ref HugePagesGB
+        IsolatedCores: !Ref IsolatedCores
+        XrdS3BucketName: !Ref XrdS3BucketName
+        XrdS3BucketRegion: !Ref XrdS3BucketRegion
+        XrdS3KeyPrefix: !Ref XrdS3KeyPrefix
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      # SubnetId: !Ref SubnetId
+      LaunchTemplate:
+        LaunchTemplateId: !GetAtt LaunchTemplate.Outputs.NodeLaunchTemplate
+        Version: "1" # !GetAtt LaunchTemplate.DefaultVersionNumber
+      NetworkInterfaces:
+        - DeviceIndex: "0"
+          PrivateIpAddress: !Ref NodeIP
+      Tags:
+        - Key: Name
+          Value: !Ref WorkerNodeName
+
+  Interface1:
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Condition: XrdInterface1Required
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-ec2-network-interface-cf.yaml
+      Parameters:
+        SubnetId: !Ref XrdInterface1SubnetID
+        SubnetTagValue: !Ref XrdInterface1SubnetTagValue
+        VPCID: !Ref VPCID
+        IPAddress: !Ref XrdInterface1IP
+        InstanceId: !Ref Instance
+        DeviceIndex: "1"
+  Interface2:
+    DependsOn: Interface1
+    Condition: XrdInterface2Required
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-ec2-network-interface-cf.yaml
+      Parameters:
+        SubnetId: !Ref XrdInterface2SubnetID
+        SubnetTagValue: !Ref XrdInterface2SubnetTagValue
+        VPCID: !Ref VPCID
+        IPAddress: !Ref XrdInterface2IP
+        InstanceId: !Ref Instance
+        DeviceIndex: "2"
+  Interface3:
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    DependsOn: Interface2
+    Condition: XrdInterface3Required
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-ec2-network-interface-cf.yaml
+      Parameters:
+        SubnetId: !Ref XrdInterface3SubnetID
+        SubnetTagValue: !Ref XrdInterface3SubnetTagValue
+        VPCID: !Ref VPCID
+        IPAddress: !Ref XrdInterface3IP
+        InstanceId: !Ref Instance
+        DeviceIndex: "3"
+  Interface4:
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    DependsOn: Interface3
+    Condition: XrdInterface4Required
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-ec2-network-interface-cf.yaml
+      Parameters:
+        SubnetId: !Ref XrdInterface4SubnetID
+        SubnetTagValue: !Ref XrdInterface4SubnetTagValue
+        VPCID: !Ref VPCID
+        IPAddress: !Ref XrdInterface4IP
+        InstanceId: !Ref Instance
+        DeviceIndex: "4"
+  Interface5:
+    DependsOn: Interface4
+    Condition: XrdInterface5Required
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-ec2-network-interface-cf.yaml
+      Parameters:
+        SubnetId: !Ref XrdInterface5SubnetID
+        SubnetTagValue: !Ref XrdInterface5SubnetTagValue
+        VPCID: !Ref VPCID
+        IPAddress: !Ref XrdInterface5IP
+        InstanceId: !Ref Instance
+        DeviceIndex: "5"
+  Interface6:
+    DependsOn: Interface5
+    Condition: XrdInterface6Required
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-ec2-network-interface-cf.yaml
+      Parameters:
+        SubnetId: !Ref XrdInterface6SubnetID
+        SubnetTagValue: !Ref XrdInterface6SubnetTagValue
+        VPCID: !Ref VPCID
+        IPAddress: !Ref XrdInterface6IP
+        InstanceId: !Ref Instance
+        DeviceIndex: "6"
+  Interface7:
+    DependsOn: Interface6
+    Condition: XrdInterface7Required
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-ec2-network-interface-cf.yaml
+      Parameters:
+        SubnetId: !Ref XrdInterface7SubnetID
+        SubnetTagValue: !Ref XrdInterface7SubnetTagValue
+        VPCID: !Ref VPCID
+        IPAddress: !Ref XrdInterface7IP
+        InstanceId: !Ref Instance
+        DeviceIndex: "7"
+  Interface8:
+    DependsOn: Interface7
+    Condition: XrdInterface8Required
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-ec2-network-interface-cf.yaml
+      Parameters:
+        SubnetId: !Ref XrdInterface8SubnetID
+        SubnetTagValue: !Ref XrdInterface8SubnetTagValue
+        VPCID: !Ref VPCID
+        IPAddress: !Ref XrdInterface8IP
+        InstanceId: !Ref Instance
+        DeviceIndex: "8"
+  Interface9:
+    DependsOn: Interface8
+    Condition: XrdInterface9Required
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-ec2-network-interface-cf.yaml
+      Parameters:
+        SubnetId: !Ref XrdInterface9SubnetID
+        SubnetTagValue: !Ref XrdInterface9SubnetTagValue
+        VPCID: !Ref VPCID
+        IPAddress: !Ref XrdInterface9IP
+        InstanceId: !Ref Instance
+        DeviceIndex: "9"
+  Interface10:
+    DependsOn: Interface9
+    Condition: XrdInterface10Required
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-ec2-network-interface-cf.yaml
+      Parameters:
+        SubnetId: !Ref XrdInterface10SubnetID
+        SubnetTagValue: !Ref XrdInterface10SubnetTagValue
+        VPCID: !Ref VPCID
+        IPAddress: !Ref XrdInterface10IP
+        InstanceId: !Ref Instance
+        DeviceIndex: "10"
+  Interface11:
+    DependsOn: Interface10
+    Condition: XrdInterface11Required
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-ec2-network-interface-cf.yaml
+      Parameters:
+        SubnetId: !Ref XrdInterface11SubnetID
+        SubnetTagValue: !Ref XrdInterface11SubnetTagValue
+        VPCID: !Ref VPCID
+        IPAddress: !Ref XrdInterface11IP
+        InstanceId: !Ref Instance
+        DeviceIndex: "11"
+  Interface12:
+    DependsOn: Interface11
+    Condition: XrdInterface12Required
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-ec2-network-interface-cf.yaml
+      Parameters:
+        SubnetId: !Ref XrdInterface12SubnetID
+        SubnetTagValue: !Ref XrdInterface12SubnetTagValue
+        VPCID: !Ref VPCID
+        IPAddress: !Ref XrdInterface12IP
+        InstanceId: !Ref Instance
+        DeviceIndex: "12"
+  Interface13:
+    DependsOn: Interface12
+    Condition: XrdInterface13Required
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-ec2-network-interface-cf.yaml
+      Parameters:
+        SubnetId: !Ref XrdInterface13SubnetID
+        SubnetTagValue: !Ref XrdInterface13SubnetTagValue
+        VPCID: !Ref VPCID
+        IPAddress: !Ref XrdInterface13IP
+        InstanceId: !Ref Instance
+        DeviceIndex: "13"
+  Interface14:
+    DependsOn: Interface13
+    Condition: XrdInterface14Required
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-ec2-network-interface-cf.yaml
+      Parameters:
+        SubnetId: !Ref XrdInterface14SubnetID
+        SubnetTagValue: !Ref XrdInterface14SubnetTagValue
+        VPCID: !Ref VPCID
+        IPAddress: !Ref XrdInterface14IP
+        InstanceId: !Ref Instance
+        DeviceIndex: "14"
+
+Outputs:
+  Instance:
+    Description: The EC2 Instance
+    Value: !Ref Instance
+

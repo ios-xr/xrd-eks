@@ -1,0 +1,38 @@
+# cSpell: Disable
+# taskcat settings for automated tests.
+
+general:
+  parameters:
+    # Location of [XRd] nested templates.
+    XrdS3BucketName: $[taskcat_autobucket]
+    # Needs to match project.name below to pick up taskcat's autosync.
+    XrdS3KeyPrefix: xrd-eks/
+    XrdS3BucketRegion: $[taskcat_current_region]
+
+    AvailabilityZones: $[taskcat_genaz_2] # "us-east-2a,us-east-2b"
+
+    XrdRootUserName: testuser
+    XrdRootPassword: testpass
+
+    ClusterName: "xrd-cluster"
+    EKSClusterName: "xrd-cluster"
+
+    RemoteAccessCIDR: "0.0.0.0/0"
+    EKSPublicAccessEndpoint: Enabled
+
+
+project:
+  # Sets key prefix for all files within an S3 bucket.
+  # This must be kept in sync with publish-s3-bucket and create-stack
+  name: 'dev'
+
+tests:
+  # Example to create an AMI suitable for XRd vRouter.
+  xrd-eks-ami:
+    template: cf-templates/xrd-eks-ami-cf.yaml
+
+  # Used for automated tests.
+  xrd-example-overlay:
+    template: cf-templates/xrd-example-cf.yaml
+    parameters:
+      Application: Overlay

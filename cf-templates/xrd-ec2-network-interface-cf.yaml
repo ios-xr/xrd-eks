@@ -1,0 +1,75 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create and attach network interface to XRd EKS worker node.
+
+#Metadata:
+
+Parameters:
+  # If SubnetId is provided then that is used; otherwise SubnetTagValue and VPCID
+  # must be provided and they are used to resolve to the SubnetID.
+  SubnetId:
+    Default: ""
+    Type: String # "AWS::EC2::Subnet::Id"
+    Description: "Subnet interface is associated with"
+  VPCID:
+    Type: "AWS::EC2::VPC::Id"
+    Description: ID of your existing VPC (e.g., vpc-0343606e).
+    Default: ""
+  SubnetTagValue:
+    Default: ""
+    Type: String
+    Description: Value of cisco.xrd.subnet tag for first XRd interface
+
+  IPAddress:
+    Type: String
+    Description: "IP Address of the interface - must be within subnet"
+  InstanceId:
+    Type: String
+    Description: "EC2 Instance ID to attach interface to"
+  DeviceIndex:
+    Type: Number
+    Description: "Index of the interface within the instance"
+
+Conditions:
+  ResolveSubnetTag: !Equals [ !Ref SubnetId, '' ]
+
+Resources:
+  ResolvedSubnetID:
+    Condition: ResolveSubnetTag
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand: !Sub ec2 describe-subnets --filters "Name=tag:cisco.xrd.subnet,Values=${SubnetTagValue}" "Name=vpc-id,Values=${VPCID}" --query Subnets[0]
+      IdField: 'SubnetId'
+
+  NetworkInterface:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      # Need to worry about security groups?
+      #GroupSet:
+      #  - String
+      PrivateIpAddress: !Ref IPAddress
+      # Allows traffic to be received has source/dest IP which is not the assigned IP/
+      SourceDestCheck: False
+      SubnetId: !If [ ResolveSubnetTag, !Ref ResolvedSubnetID, !Ref SubnetId]
+      Tags:
+        - Key: node.k8s.amazonaws.com/no_manage
+          Value: true
+
+  NetworkInterfaceAttachment:
+    Type: "AWS::EC2::NetworkInterfaceAttachment"
+    Properties:
+      DeleteOnTermination: True
+      InstanceId: !Ref InstanceId
+      NetworkInterfaceId: !GetAtt NetworkInterface.Id
+      DeviceIndex: !Ref DeviceIndex
+
+Outputs:
+  NetworkInterface:
+    Description: The network interface.
+    Value: !Ref NetworkInterface
+
+  NetworkInterfaceAttachment:
+    Description: The network interface attachment
+    Value: !Ref NetworkInterfaceAttachment
+

@@ -1,0 +1,516 @@
+# Based on amazon-eks-nodegroup.template.yaml, but restricting to what
+# is needed to create node launch template (and not nodegroup), using specified
+# (single) subnet.
+# Support for Bottlerocket and Windows worker nodes is generally removed.
+# Other capabilities for generally retained.
+# Trying to add whole lines and so keep merging with upstream changes easier!
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Deploys EKS nodes into an existing VPC (qs-1p7nknoid)
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Network configuration
+        Parameters:
+          - SubnetID
+      - Label:
+          default: Amazon EC2 configuration
+        Parameters:
+          - KeyPairName
+          - HttpProxy
+          - CustomAmiId
+      - Label:
+          default: EKS configuration
+        Parameters:
+          - EKSClusterName
+          - NodeInstanceType
+          - NodeVolumeSize
+    ParameterLabels:
+      KeyPairName:
+        default: SSH key name
+      SubnetID:
+        default: Subnet ID
+      EKSClusterName:
+        default: EKS cluster name
+      NodeInstanceType:
+        default: Nodes instance type
+      NodeVolumeSize:
+        default: Node volume size
+      CustomAmiId:
+        default: Custom AMI id
+      HttpProxy:
+        default: HTTP proxy
+  # Not updated following cut'n'paste
+  LintSpellExclude:
+    - Managed Node Group
+    - files/bootstrap.sh
+    - https://github.com/awslabs/amazon-eks-ami
+    - autoscaler
+    - Lambda
+    - Security Group
+    - Target Group
+    - Kubernetes
+    - Instance Profile
+    - Role
+    - Enabled
+    - Disabled
+    - Subnet
+    - (Optional)
+    - Custom
+    - Unmanaged
+  # What is this?
+  # AutoInstance:
+  #   NodeInstanceType:
+  #     InstanceFilters:
+  #      - [['PV'], "!=", "SupportedVirtualizationTypes"]
+  # cfn-lint: { config: { ignore_checks: [W2030, W9002, W9003, W9004, E3008, W9006]}}
+  cfn-lint: { config: { ignore_checks: [ E3008 ] }}
+Parameters:
+  KeyPairName:
+    Description: Name of an existing EC2 key pair. All instances will launch with this key pair. Ignored if "Custom launch template" is provided. If left blank, no keypair will be associated with the nodes.
+    Type: String
+    Default: ""
+  CustomAmiId:
+    Type: String
+    Default: ""
+    Description: AMI id of image suitable for running XRd vRouter
+  SubnetID:
+    Description: ID of subnet for the primary (K8S) ENI for XRd worker nodes (e.g.,subnet-a0246123).
+    Type: AWS::EC2::Subnet::Id
+  NodeInstanceType:
+    Default: m5n.2xlarge
+    AllowedValues:
+      - m5.2xlarge
+      - m5.24xlarge
+      - m5n.2xlarge
+      - m5n.24xlarge
+    ConstraintDescription: Must be a supported EC2 instance type
+    Description: Type of EC2 instance for the node instances.
+    Type: String
+  NodeVolumeSize:
+    # @@@ - Pending core size discussion
+    Default: 30
+    Description: Size for node volumes.
+    Type: String
+  Platform:
+    Type: String
+    AllowedValues: [ "VRouter", "ControlPlane" ]
+    Default: "VRouter"
+    Description: Which XRd platform to deploy - XRd vRouter or XRd Control Plane
+  HugePagesGB:
+    Default: ""
+    Type: String
+    Description: "(Optional) Huge page allocation on machine.  Default is 3 Gb.  Ignored if platform is ControlPlane or CustomAmiId provided."
+  IsolatedCores:
+    Default: ""
+    Type: String
+    Description: "(Optional) Isolated cores on machine, e.g. '1, 4-5'.  If not specified no cores are isolated. Ignored if platform is ControlPlane or CustomAmiId provided."
+  KubernetesVersion:
+    Type: String
+    AllowedValues: [ "1.22" ]
+    Default: "1.22"
+    Description: Kubernetes control plane version.
+
+  EKSClusterName:
+    Description: Name of the EKS cluster to join.
+    Type: String
+  HttpProxy:
+    Type: String
+    Default: ""
+    Description: (Optional) Specify the host name for an HTTP proxy to use for outbound internet access.
+  Labels:
+    Default: ""
+    Type: String
+    Description: (Optional) Comma separated list of <key>=<value> pairs representing node labels to assign to the node group. Ignored if "Custom launch template" is provided.
+  Taints:
+    Default: ""
+    Type: String
+    Description: (Optional) Comma separated list of <key>=<value>:<effect> representing node taints to assign to the node group. Ignored if "Custom launch template" is provided.
+  NodeSecurityGroupId:
+    Default: ""
+    Type: String
+    Description: (Optional) Provide the id of a Security Group to use for this node group. If not specified, the cluster Security Group will be used.
+
+  XrdS3BucketName:
+    # Default: TBD
+    Type: String
+  XrdS3KeyPrefix:
+    # Default: TBD
+    Type: String
+  XrdS3BucketRegion:
+    # Default: TBD
+    Type: String
+
+
+
+
+Conditions:
+  UseCustomAmi: !Not [ !Equals [!Ref CustomAmiId, ""]]
+  UseXrdQsAmi: !And [ !Equals [!Ref CustomAmiId, ""], !Equals [ !Ref Platform, 'VRouter']]
+  UseSSmAmi: !And [ !Equals [!Ref CustomAmiId, ""], !Equals [ !Ref Platform, 'ControlPlane']]
+  PlatformIsVRouter: !Not [ !Equals [ !Ref Platform, 'ControlPlane'] ]
+  UseClusterNodeSecurityGroup: !Equals [!Ref NodeSecurityGroupId, ""]
+  EnableProxy: !Not [!Equals [!Ref HttpProxy, ""]]
+  AddExtraArgs: !Or [!Not [ !Equals [ !Ref Labels, "" ] ], !Not [ !Equals [ !Ref Taints, "" ] ]]
+  AddLabels: !Not [ !Equals [ !Ref Labels, "" ] ]
+  AddTaints: !Not [ !Equals [ !Ref Taints, "" ] ]
+
+Mappings:
+
+  InstanceTypeProperties:
+    m5n.2xlarge:
+      CoreCount: 4
+    m5.2xlarge:
+      CoreCount: 4
+    m5n.24xlarge:
+      CoreCount: 48
+    m5.24xlarge:
+      CoreCount: 48
+
+Resources:
+  VPCID:
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand: !Sub "ec2 describe-subnets --subnet-ids ${SubnetID} --query 'Subnets[0].{VpcId: VpcId}'"
+      IdField: 'VpcId'
+  VPCCIDR:
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand: !Sub "ec2 describe-vpcs --vpc-id ${VPCID} --query 'Vpcs[0].{CidrBlock: CidrBlock}'"
+      IdField: 'CidrBlock'
+  NodeInstanceProfileArn:
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand: !Sub
+        - "iam list-instance-profiles --query 'InstanceProfiles[].{role: Roles[0].RoleName, arn: Arn}[?role==`${NodeInstanceRoleName}`] | [0]'"
+        - NodeInstanceRoleName: eks-quickstart-UnmanagedNodeInstance
+      IdField: 'arn'
+  ClusterEndpoint:
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand: !Sub "eks describe-cluster --name ${EKSClusterName} --query '{Endpoint: cluster.endpoint, CaData: cluster.certificateAuthority.data}'"
+      IdField: 'Endpoint'
+  ClusterNodeSecurityGroup:
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand: !Sub "eks describe-cluster --name ${EKSClusterName} --query '{SGID: cluster.resourcesVpcConfig.clusterSecurityGroupId}'"
+      IdField: 'SGID'
+  CleanupSecurityGroupDependencies:
+    Type: Custom::Cleanup
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-CleanupSecurityGroupDependencies'
+      SecurityGroups: !If [UseClusterNodeSecurityGroup, !Ref ClusterNodeSecurityGroup, !Ref NodeSecurityGroupId]
+  # Based on equivalent resource in amazon-eks-nodegroup.template.yaml
+  SsmAmiId:
+    Condition: UseSSmAmi
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub ['arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-ResourceReader', {Prefix: 'eks-quickstart'}]
+      AwsCliCommand: !Sub
+       - "ssm get-parameter --name '${ParamPath}' --query Parameter"
+       - ParamPath: !Sub
+           - "/aws/service/eks/optimized-ami/${KubernetesVersion}/${OS}/recommended/image_id"
+           - OS: amazon-linux-2
+      IdField: 'Value'
+
+  XrdQsAmi:
+    Condition: UseXrdQsAmi
+    Type: Custom::XrdQsAmi
+    Properties:
+      ServiceToken: !GetAtt 'XrdQsAmiFunction.Arn'
+      TemplateUri: !Sub 'https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-eks-ami-cf.yaml'
+      KubernetesVersion: !Ref KubernetesVersion
+      Key: 'xrd-quickstart'
+      XrdS3BucketName: !Ref XrdS3BucketName
+      XrdS3KeyPrefix: !Ref XrdS3KeyPrefix
+      XrdS3BucketRegion: !Ref XrdS3BucketRegion
+      EksQsSharedResources: 'No'
+
+  XrdQsAmiRole:
+    Condition: UseXrdQsAmi
+    Type: AWS::IAM::Role
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks: [EIAMPolicyWildcardResource, EIAMPolicyActionWildcard]
+          ignore_reasons:
+            EIAMPolicyWildcardResource: 'this role is used to launch cfn stacks containing iam roles and lambda functions. At this time it is unclear which permissions these resource types require'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: 'xrd-qs-ami'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                - 'lambda:*'
+                - 'iam:*'
+                - 's3:*'
+                - 'cloudformation:DescribeStacks'
+                - 'cloudformation:ListStacks'
+                - 'cloudformation:CreateStack'
+                - 'cloudformation:UpdateStack'
+                - 'ec2:*'
+                Resource: '*'
+  XrdQsAmiFunction:
+    Condition: UseXrdQsAmi
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Ensures the AMI stack (and im) whether the AMI stack
+      Handler: index.handler
+      Runtime: python3.7
+      Role: !GetAtt XrdQsAmiRole.Arn
+      Timeout: 600
+      Code:
+        ZipFile: |
+          import cfnresponse
+          import boto3
+          import traceback
+          import json
+          from botocore.config import Config
+          from uuid import uuid4
+          from random import randint
+          from time import sleep
+          C = Config(retries={'max_attempts': 10, 'mode': 'standard'})
+          BC = boto3.client
+          CFN = 'cloudformation'
+          def waiter(c, o, s):
+              print(f"waiter({o}, {s}) started")
+              retries = 50
+              while True:
+                  retries -= 1
+                  stacks = c.describe_stacks(StackName=s)['Stacks']
+                  stack = [stack for stack in stacks if stack['StackId'] == s]
+                  status = stack[0]['StackStatus']
+                  if status in ["CREATE_COMPLETE", "UPDATE_COMPLETE"]:
+                      break
+                  if status.endswith("FAILED") or status in ["DELETE_COMPLETE", "UPDATE_ROLLBACK_COMPLETE"] or retries == 0:
+                      raise RuntimeError(f"Stack operation failed: {o} {status} {s}")
+                  sleep(randint(1000, 1500) / 100)
+              print(f"waiter({o}, {s}) done")
+          def get_stacks(key, val, region=None):
+              cfn = BC(CFN, region_name=region, config=C)
+              stacks = []
+              for p in cfn.get_paginator('describe_stacks').paginate():
+                  stacks += p['Stacks']
+              s = [s for s in stacks if {'Key': key, 'Value': val} in s['Tags']]
+              if not len(s):
+                  return (None, None)
+              stack_id = s[0]['StackId']
+              status = s[0]['StackStatus']
+              if status.endswith('_IN_PROGRESS'):
+                  op = status.split('_')[0].lower()
+                  waiter(cfn, op, stack_id)
+                  if op == 'delete':
+                      return (None,None)
+
+              ami_id = None
+              for o in s[0]['Outputs']:
+                  if o['OutputKey'] == 'AmiId':
+                      ami_id = o['OutputValue']
+                      break
+
+              return (stack_id, ami_id)
+
+          def put_stack(name, region, template_url, parameters, key):
+              print(f"put_stack({name}, {region}, {template_url}, {parameters}, {key})")
+              sleep(randint(0, 6000) / 100)  # jitter to reduce the chance of concurrent queries racing
+              (stack_id, _) = get_stacks(key, name, region)
+              client = BC(CFN, region_name=region)
+              args = {
+                  "StackName": stack_id if stack_id else f"{key}-{name}",
+                  "TemplateURL": template_url,
+                  "Parameters": [{"ParameterKey": k, "ParameterValue": v} for k, v in parameters.items()],
+                  "Capabilities": ['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND'],
+                  "OnFailure": "DELETE",
+                  "Tags": [{"Key": key, "Value": name}]
+              }
+              if stack_id:
+                  method = client.update_stack
+                  wait = 'update'
+                  del args['OnFailure']
+              else:
+                  method = client.create_stack
+                  wait = 'create'
+
+              try:
+                  stack_id = method(**args)['StackId']
+              except Exception as e:
+                  traceback.print_exc()
+                  if f"No updates are to be performed" in str(e):
+                      wait = None
+                  else:
+                      raise
+
+              if wait:
+                  waiter(client, wait, stack_id)
+
+              (_, ami_id) = get_stacks(key, name, region)
+              return ami_id
+
+
+          def handler(event, context):
+              print(json.dumps(event))
+              s = cfnresponse.SUCCESS
+              r = " "
+              p = event.get('PhysicalResourceId', context.log_stream_name)
+              props = event['ResourceProperties']
+              key = props['Key']
+              template_uri = props['TemplateUri']
+              name = 'AMI-{}'.format(props['KubernetesVersion'].replace('.', '-'))
+              parameters = dict([ (k,v) for k,v in props.items() if not k in ['TemplateUri', 'Key', 'ServiceToken'] ])
+              response = {}
+
+              try:
+                  if event['RequestType'] != 'Delete':
+                      retries = 10
+                      while True:
+                          retries -= 1
+                          try:
+                              ami_id = put_stack(name, None, template_uri, parameters, key)
+                              response['AmiId'] = ami_id
+                              break
+                          except Exception:
+                              traceback.print_exc()
+                              if retries > 0:
+                                  sleep(randint(0, 3000) / 100)
+                              else:
+                                  raise
+              except Exception as e:
+                  s = cfnresponse.FAILED
+                  r = f"Exception: {e}"
+                  traceback.print_exc()
+              finally:
+                  cfnresponse.send(event, context, s, response, p, reason=r)
+
+
+
+  NodeLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: !Ref NodeVolumeSize
+              VolumeType: gp2
+              DeleteOnTermination: true
+        IamInstanceProfile:
+          Arn: !Ref NodeInstanceProfileArn
+        KeyName: !Ref KeyPairName
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: false
+            Description: String
+            Groups:
+              - !If [UseClusterNodeSecurityGroup, !Ref ClusterNodeSecurityGroup, !Ref NodeSecurityGroupId]
+            SubnetId: !Ref SubnetID
+        CpuOptions:
+          ThreadsPerCore: 1
+          CoreCount: !FindInMap [InstanceTypeProperties, !Ref NodeInstanceType, CoreCount]
+
+        ImageId: !If
+          - UseCustomAmi
+          - !Ref CustomAmiId
+          - !If
+              - UseSSmAmi
+              - !Ref SsmAmiId
+              - !GetAtt XrdQsAmi.AmiId
+
+        InstanceType: !Ref NodeInstanceType
+        UserData:
+          Fn::Base64: !Sub
+                - |
+                  #!/bin/bash -x
+                  exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+                  echo "fs.inotify.max_user_instances=64000" >> /etc/sysctl.d/50-xrd.conf
+                  echo "fs.inotify.max_user_watches=64000" >> /etc/sysctl.d/50-xrd.conf
+                  sysctl -p --system
+                  ${VRouterSetup}
+                  ${ProxySetup}
+                  /etc/eks/bootstrap.sh ${EKSClusterName} ${ExtraArgs} \
+                                    --b64-cluster-ca ${ClusterEndpoint.CaData} \
+                                    --apiserver-endpoint ${ClusterEndpoint}  || signal 1
+                  ${ProxyPostSetup}
+                  ${VRouterReboot}
+                - ExtraArgs: !If
+                    - AddExtraArgs
+                    - !Sub
+                      - "--kubelet-extra-args '${LabelsArg} ${TaintsArg}'"
+                      - LabelsArg: !If [AddLabels, !Sub "--node-labels=${Labels}", ""]
+                        TaintsArg: !If [AddTaints, !Sub "--register-with-taints=${Taints}", ""]
+                    - ""
+                  ProxySetup: !If
+                    - EnableProxy
+                    - !Sub |
+                      cat <<EOF >> /etc/environment
+                      HTTP_PROXY=${HttpProxy}
+                      HTTPS_PROXY=${HttpProxy}
+                      http_proxy=${HttpProxy}
+                      https_proxy=${HttpProxy}
+                      no_proxy=${VPCCIDR},localhost,127.0.0.1,169.254.169.254,.internal
+                      NO_PROXY=${VPCCIDR},localhost,127.0.0.1,169.254.169.254,.internal
+                      EOF
+                      set -a
+                      source /etc/environment
+                    - ""
+                  ProxyPostSetup: !If
+                    - EnableProxy
+                    - |
+                      mkdir -p /etc/systemd/system/docker.service.d
+                      cat <<EOF >> /etc/systemd/system/docker.service.d/proxy.conf
+                      [Service]
+                      EnvironmentFile=/etc/environment
+                      EOF
+                      cat <<EOF >> /etc/systemd/system/kubelet.service.d/proxy.conf
+                      [Service]
+                      EnvironmentFile=/etc/environment
+                      EOF
+                      systemctl daemon-reload
+                      systemctl enable --now --no-block docker
+                      systemctl restart docker
+                      systemctl restart kubelet
+                    - ""
+                  VRouterSetup: !If
+                    - PlatformIsVRouter
+                    - !Sub
+                      - |
+                        export HUGEPAGES_GB=${HugePagesGB}
+                        export ISOLATED_CORES=${IsolatedCores}
+                        chmod a+x ${Script}
+                        ${Script}
+                      - Script: "/etc/xrd/bootstrap.sh"
+                    - ""
+                  VRouterReboot: !If
+                    - PlatformIsVRouter
+                    - reboot
+                    - ""
+        TagSpecifications:
+        - ResourceType: instance
+          # Slight guessing game applied here - one or more of these tags
+          # is needed for bootstrap.sh to pick up the cluster name and onboard
+          # into.
+          Tags:
+          - Key: !Sub kubernetes.io/cluster/${EKSClusterName}
+            Value: owned
+          - Key: kubernetes.io/cluster
+            Value: !Sub ${EKSClusterName}
+
+Outputs:
+  NodeLaunchTemplate:
+    Value: !Ref NodeLaunchTemplate

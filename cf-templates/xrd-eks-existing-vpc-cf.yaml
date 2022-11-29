@@ -1,0 +1,296 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: EKS stack for running XRd topologies.
+
+#
+# Essentially 3 parts to this:
+# 1) An EKS advanced configuration object
+# 2) The EKSStack
+# 3) Configure the EKS stack for XRd (see below)
+#
+# The XRd setup instructions require the following commands to be run.
+#
+# kubectl set env ds aws-node -n kube-system MAX_ENI=1
+#
+# This ensures that the AWS CNI doesn't grab a whole additional ENI if it runs
+# out of IPs for pods.   This maximizes the interfaces available for XRd, but
+# with the downside that it limits the number of pods which can be run on the
+# node to the number of secondary IPs which can be allocated on the one ENI the
+# CNI may use.
+#
+# Implementation based on https://github.com/aws-quickstart/quickstart-cisco-secure-firewall-cloud-native/blob/main/templates/sfcn.template.yaml#L1654
+
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        # AWSQS::Kubernetes::Resource not found during Lint (due to custom activation?)
+        - E3001
+  LintSpellExclude:
+    - Multus
+
+Parameters:
+  RemoteAccessCIDR:
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/x
+    Description: CIDR IP range that is permitted to access the instances. We recommend that you set this value to a trusted IP range.
+    Type: String
+  EKSPublicAccessEndpoint:
+    Type: String
+    AllowedValues: [Enabled, Disabled]
+    Default: Disabled
+    Description: Configure access to the Kubernetes API server endpoint from outside of your VPC.
+
+  AdditionalEKSAdminUserArn:
+    Default: ""
+    AllowedPattern: '^arn:(aws|aws-cn|aws-us-gov):iam::[0-9]{12}:.*|^$'
+    Description: "(Optional) IAM user Amazon Resource Name (ARN) to be granted administrative access to the EKS cluster."
+    Type: String
+  AdditionalEKSAdminRoleArn:
+    Default: ""
+    AllowedPattern: '^arn:(aws|aws-cn|aws-us-gov):iam::[0-9]{12}:.*|^$'
+    Description: "(Optional) IAM role Amazon Resource Name (ARN) to be granted administrative access to the EKS cluster."
+    Type: String
+
+  KeyPairName:
+    Description: Name of an existing key pair, which allows you
+      to securely connect to your instance after it launches.
+    Type: "AWS::EC2::KeyPair::KeyName"
+  PublicSubnet1ID:
+    Type: "AWS::EC2::Subnet::Id"
+    Description: ID of the public subnet in AZ1 (needed for the Bastion host).
+  PublicSubnet2ID:
+    Type: "AWS::EC2::Subnet::Id"
+    Description: ID of the public subnet in AZ2 (needed for the Bastion host).
+  PrivateSubnet1ID:
+    Type: "AWS::EC2::Subnet::Id"
+    Description: ID of the private subnet in Availability Zone 1 of your existing VPC (e.g., subnet-fe9a8b32).
+  PrivateSubnet2ID:
+    Type: "AWS::EC2::Subnet::Id"
+    Description: ID of the private subnet in Availability Zone 2 of your existing VPC (e.g., subnet-be8b01ea).
+
+  EKSClusterName:
+    Type: String
+    Default: "xrd-cluster"
+    Description: "Name for the EKS cluster"
+
+  MultusCNI:
+    Type: String
+    AllowedValues: [ "Enabled", "Disabled" ]
+    Default: "Enabled"
+    Description: Skip enabling Multus CNI by choosing "Disabled".
+
+  MultusCNIManifestURL:
+    Default: https://raw.githubusercontent.com/aws/amazon-vpc-cni-k8s/master/config/multus/v3.7.2-eksbuild.1/aws-k8s-multus.yaml
+    Description: "URL containing multus manifest (default v3.7.2)"
+    Type: String
+
+  KubernetesVersion:
+    Type: String
+    AllowedValues: [ "1.22" ]
+    Default: "1.22"
+    Description: Kubernetes control plane version.
+
+  EKSAdvancedConfigurationName:
+    Default: XrdEksAdvancedConfiguration
+    Type: String
+    Description: "(Optional) Name of EKS Advanced Configuration table"
+
+Conditions:
+  EnableMultusCNI: !Equals [!Ref 'MultusCNI', 'Enabled']
+
+Resources:
+  # AutoDetectSharedResources Copied from amazon-eks-existing-vpc and modified
+  AutoDetectSharedResources:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://aws-quickstart-${AWS::Region}.s3.${AWS::Region}.${AWS::URLSuffix}/quickstart-amazon-eks/templates/amazon-eks-prerequisites.template.yaml'
+      Parameters:
+        Version: "1.0.0"
+        AccountTemplateUri: !Sub 'https://aws-quickstart-${AWS::Region}.s3.${AWS::Region}.${AWS::URLSuffix}/quickstart-amazon-eks/templates/amazon-eks-per-account-resources.template.yaml'
+        RegionalTemplateUri: !Sub 'https://aws-quickstart-${AWS::Region}.s3.${AWS::Region}.${AWS::URLSuffix}/quickstart-amazon-eks/templates/amazon-eks-per-region-resources.template.yaml'
+
+  VPCID:
+    DependsOn:
+      - AutoDetectSharedResources
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand: !Sub "ec2 describe-subnets --subnet-ids ${PrivateSubnet1ID} --query 'Subnets[0].{VpcId: VpcId}'"
+      IdField: 'VpcId'
+
+  EKSAdvancedConfiguration:
+    Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      TemplateURL: https://s3.amazonaws.com/aws-quickstart/quickstart-amazon-eks/templates/amazon-eks-advanced-configuration.template.yaml
+      Parameters:
+        ConfigSetName: !Ref EKSAdvancedConfigurationName
+        # Without this EKS stack creation is failing.  Unclear why.
+        IamOidcProvider: "Disabled"
+        KubernetesVersion: !Ref KubernetesVersion
+
+  EKSStack:
+    Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    DependsOn:
+      - EKSAdvancedConfiguration
+
+    Metadata:
+      cfn-lint: { config: { ignore_checks: [ W9901 ] } }
+    Properties:
+      TemplateURL: https://s3.amazonaws.com/aws-quickstart/quickstart-amazon-eks/templates/amazon-eks-entrypoint-existing-vpc.template.yaml
+      Parameters:
+        RemoteAccessCIDR: !Ref RemoteAccessCIDR
+        EKSPublicAccessEndpoint: !Ref EKSPublicAccessEndpoint
+        EKSClusterName: !Ref EKSClusterName
+        VPCID: !Ref VPCID
+        PrivateSubnet1ID: !Ref PrivateSubnet1ID
+        PrivateSubnet2ID: !Ref PrivateSubnet2ID
+        AdditionalEKSAdminUserArn: !Ref AdditionalEKSAdminUserArn
+        AdditionalEKSAdminRoleArn: !Ref AdditionalEKSAdminRoleArn
+        NumberOfNodes: 0
+        ALBIngressController: Disabled
+        ConfigSetName: !Ref EKSAdvancedConfigurationName
+        # PublicSubnet1ID is needed to create a Bastion host.
+        PublicSubnet1ID: !Ref PublicSubnet1ID
+        PublicSubnet2ID: !Ref PublicSubnet2ID
+        ProvisionBastionHost: Enabled
+        # Shared resources installed explicitly above in this stack
+        PerAccountSharedResources: 'No'
+        PerRegionSharedResources: 'No'
+        KeyPairName: !Ref KeyPairName
+        NodeGroupType: Unmanaged
+
+  GetKubectlLayerArn:
+    DependsOn:
+    - AutoDetectSharedResources
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand: lambda list-layer-versions --layer-name eks-quickstart-Kubectl --query 'max_by(LayerVersions, &Version)'
+      IdField: 'LayerVersionArn'
+
+  GetCrhelperLayerArn:
+    DependsOn:
+    - AutoDetectSharedResources
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand: lambda list-layer-versions --layer-name eks-quickstart-Crhelper --query 'max_by(LayerVersions, &Version)'
+      IdField: 'LayerVersionArn'
+
+  GetAwsCliLayerArn:
+    DependsOn:
+    - AutoDetectSharedResources
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand: lambda list-layer-versions --layer-name eks-quickstart-AwsCli --query 'max_by(LayerVersions, &Version)'
+      IdField: 'LayerVersionArn'
+
+  GetKubernetesAdminRoleArn:
+    DependsOn:
+    - AutoDetectSharedResources
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand: iam list-roles --query 'Roles[?RoleName==`awsqs-eks-cluster`] | [0]'
+      IdField: 'Arn'
+
+
+  KubectlFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Timeout: 60
+      Runtime: python3.7
+      Handler: index.handler
+      Role: !Ref GetKubernetesAdminRoleArn
+      Layers:
+        [
+          !Ref GetKubectlLayerArn,
+          !Ref GetCrhelperLayerArn,
+          !Ref GetAwsCliLayerArn,
+        ]
+      Code:
+        ZipFile: |
+          import logging
+          import subprocess
+          import shlex
+          import cfnresponse
+          import base64
+
+          def run_command(command):
+              try:
+                  print("executing command: %s" % command)
+                  output = subprocess.check_output(shlex.split(command), stderr=subprocess.STDOUT).decode("utf-8")
+                  print(output)
+              except subprocess.CalledProcessError as exc:
+                  print("Command failed with exit code %s, stderr: %s" % (exc.returncode, exc.output.decode("utf-8")))
+                  raise Exception(exc.output.decode("utf-8"))
+              return output
+
+          def create_kubeconfig(cluster_name):
+              run_command(f"aws eks update-kubeconfig --name {cluster_name} --alias {cluster_name}")
+              run_command(f"kubectl config use-context {cluster_name}")
+
+          def handler(event, context):
+              print(event)
+              status = cfnresponse.SUCCESS
+              data = {}
+              try:
+                  if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                      create_kubeconfig(event['ResourceProperties']['ClusterName'])
+                      command = event['ResourceProperties']['Command']
+                      data["Output"] = run_command(f"kubectl {command}")
+                      print(data["Output"])
+                      if event['ResourceProperties'].get('Decode') == 'base64':
+                          data["Output"] = base64.b64decode(data["Output"]).decode('utf-8')
+              except Exception:
+                  logging.error('Unhandled exception', exc_info=True)
+                  status = cfnresponse.FAILED
+              finally:
+                  cfnresponse.send(event, context, status, data, event.get('PhysicalResourceId', context.log_stream_name))
+      Environment:
+        Variables:
+          KUBECONFIG: /tmp/.kube/config
+          # NO_PROXY: !Sub "${VPCCIDR},localhost,127.0.0.1,169.254.169.254,.internal"
+      # Not needed when the API server has a public endpoint?
+      # VpcConfig:
+      #   SecurityGroupIds: [!Ref ControlPlaneSecurityGroup]
+      #   SubnetIds:
+      #     - !Ref PrivateSubnet1ID
+      #     - !Ref PrivateSubnet2ID
+  SetMaxEni:
+    DependsOn:
+    - EKSStack
+    Type: "Custom::Kubectl"
+    Properties:
+      ServiceToken: !GetAtt KubectlFunction.Arn
+      ClusterName: !Ref EKSClusterName
+      Command: "set env ds aws-node -n kube-system MAX_ENI=1"
+
+  MultusCNIManifest:
+    Condition: EnableMultusCNI
+    DependsOn:
+      - EKSStack
+    Type: "Custom::Kubectl"
+    Properties:
+      ServiceToken: !GetAtt KubectlFunction.Arn
+      ClusterName: !Ref EKSClusterName
+      Command: !Sub "apply -f ${MultusCNIManifestURL}"
+
+Outputs:
+  EKSClusterName:
+    Value: !GetAtt EKSStack.Outputs.EKSClusterName
+  BastionIP:
+    Value: !GetAtt EKSStack.Outputs.BastionIP
+  BastionSecurityGroup:
+    Value: !GetAtt EKSStack.Outputs.BastionSecurityGroup
+  NodeGroupSecurityGroup:
+    Value: !GetAtt EKSStack.Outputs.NodeGroupSecurityGroup
+  ControlPlaneSecurityGroup:
+    Value: !GetAtt EKSStack.Outputs.ControlPlaneSecurityGroup
+  OIDCIssuerURL:
+    Value: !GetAtt EKSStack.Outputs.OIDCIssuerURL
