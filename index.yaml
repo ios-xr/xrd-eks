@@ -1,0 +1,44 @@
+apiVersion: v1
+entries:
+  aws-overlay-example:
+  - apiVersion: v2
+    appVersion: latest
+    created: "2022-11-30T17:59:01.144513Z"
+    dependencies:
+    - alias: xrd1
+      name: xrd-vrouter
+      repository: https://ios-xr.github.io/xrd-helm
+      version: ^1.0.0-0
+    - alias: xrd2
+      name: xrd-vrouter
+      repository: https://ios-xr.github.io/xrd-helm
+      version: ^1.0.0-0
+    - alias: host1
+      name: simple-host
+      repository: file://../simple-host
+      version: 0.1.0
+    - alias: host2
+      name: simple-host
+      repository: file://../simple-host
+      version: 0.1.0
+    description: Two XRd instances providing overlay with container hosts on either
+      side.
+    digest: 44e2ecef2c5c13f9b72383620706504030ab81a50ad7d0d3e27c227641658e18
+    name: aws-overlay-example
+    type: application
+    urls:
+    - https://ios-xr.github.io/xrd-eks/aws-overlay-example-0.1.0.tgz
+    version: 0.1.0
+  simple-host:
+  - apiVersion: v2
+    appVersion: latest
+    created: "2022-11-30T17:59:01.14514Z"
+    description: Deployment of a specified image (default alpine) as a host, with
+      ability to specify Multus secondary network attachment.
+    digest: 02b166fce26553bb1976395856b1a403a5df4303d37bba68a47cd10e174a3dc9
+    name: simple-host
+    type: application
+    urls:
+    - https://ios-xr.github.io/xrd-eks/simple-host-0.1.0.tgz
+    version: 0.1.0
+generated: "2022-11-30T17:59:01.142401Z"
