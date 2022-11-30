@@ -88,7 +88,6 @@ Parameters:
     Description: Type of EC2 instance for the node instances.
     Type: String
   NodeVolumeSize:
-    # @@@ - Pending core size discussion
     Default: 30
     Description: Size for node volumes.
     Type: String

@@ -5,9 +5,9 @@ set -o nounset
 set -o pipefail
 
 show_help() {
-    >&2 echo "create_stack.sh - Create an example XRd CF stack"
+    >&2 echo "Usage: create-stack -u XR_USERNAME -p XR_PASSWORD -k EC2_KEY_PAIR [-a CUSTOM_AMI_ID]"
     >&2 echo ""
-    >&2 echo "Usage: create_stack.sh -u XR_USERNAME -p XR_PASSWORD -k EC2_KEY_PAIR [-a CUSTOM_AMI_ID]"
+    >&2 echo "Create an example XRd CF stack"
 }
 
 # Parse the arguments
@@ -104,7 +104,7 @@ add_parameter Platform "${PLATFORM}"
 add_parameter XrdRootUserName "${XR_USERNAME}"
 add_parameter XrdRootPassword "${XR_PASSWORD}"
 
-if [ -n "${CUSTOM_AMI_ID}" ]; then
+if [ -n "${CUSTOM_AMI_ID:-}" ]; then
     add_parameter CustomAmiId "${CUSTOM_AMI_ID}"
 fi
 

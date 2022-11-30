@@ -24,8 +24,8 @@ templates and will not work for other users.  Each step requires individual acti
 The following are mandatory requirements to proceed:
 
  * [X] An ECR [Image Repository](#image-repository) with XRd images loaded.
- * [X] Access to the public [XRd Helm Repository](https://ios-xr.github.io/xrd-helm) - @@@ check link when published
- * [X] Access to the public [XRd on AWS Helm Repository](https://ios-xr.github.io/xrd-aws/helm) - @@@ check link when published
+ * [X] Access to the public [XRd Helm Repository](https://ios-xr.github.io/xrd-helm)
+ * [X] Access to the public [XRd on AWS Helm Repository](https://ios-xr.github.io/xrd-eks)
  * [X] An [S3 Bucket] containing the following resources from this repository:
    * CloudFormation templates
    * AMI Assets
@@ -37,10 +37,11 @@ The following are mandatory requirements to proceed:
 The following are optional:
  * [X] An additional [User or Role ARN](#additional-arns) with EKS admin privileges
  * [X] Additional [tooling](#tooling):
-   * `helm`
+   * `helm` (recommended)
+   * `kubectl` (recommended)
+   * `skopeo` (recommended)
    * `docker`
-   * `kubectl`
-   * `skopeo`
+   * `podman`
 
 More details are provided for each below.
 
@@ -56,6 +57,9 @@ service.
 External users will need to download XRd images from
 [Cisco](https://www.cisco.com/c/en/us/support/routers/ios-xrd/series.html#~tab-downloads)
 and manually upload them to the ECR repo.
+
+The `publish-ecr` script is provided in this repo to create an ECR bucket
+with the recommended name and upload a user-provided image to it.
 
 #### S3 Bucket
 
@@ -94,12 +98,16 @@ specified in the CF template to allow wider interaction with the cluster.
 
 #### Tooling
 
-The `publish-s3-bucket` script requires the `aws` CLI tool to be installed.
+The `publish-s3-bucket` and `publish-ecr` scripts require the `aws` CLI
+tool to be installed.
 
-In addition to the `aws` CLI, it can be helpful to have `helm` and `kubectl`
-installed to interact with the cluster, and either `docker` or `skopeo` to upload images to the ECR repo.
+The `publish-ecr` script also requires one of `skopeo`, `docker`, or `podman`
+to be installed to upload images to the ECR repo.
 
-The tools must be setup correctly, including setting the AWS context.
+In addition to these requirements, it can be helpful to have `helm` and
+`kubectl` installed to interact with the cluster once it's up and running.
+
+The tools must be set up correctly, including setting the AWS context.
 
 ### First application launch
 
@@ -155,10 +163,15 @@ stack from the command line.
 This script has three required arguments: an XR root username and password,
 and an EC2 key pair.
 
-```
-create_stack.sh - Create an example XRd CF stack
+It also requires the XRd image to be published in the AWS user's ECR
+repository, with the image name `xrd/xrd-vrouter:latest`. This can be
+done by running the `publish-ecr` script to publish an XRd vRouter image
+to the default repository with the tag 'latest'.
 
-Usage: create_stack.sh -u USERNAME -p PASSWORD -k KEY_PAIR_NAME [-a CUSTOM_AMI_ID]
+```
+Usage: create-stack -u XR_USERNAME -p XR_PASSWORD -k KEY_PAIR_NAME [-a CUSTOM_AMI_ID]
+
+Create an example XRd CF stack
 ```
 
 ## List of Templates

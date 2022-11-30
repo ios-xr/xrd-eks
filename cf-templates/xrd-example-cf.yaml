@@ -222,9 +222,8 @@ Conditions:
 
 Mappings:
   HelmRepositories:
-    # @@@ check links when published
     Overlay:
-      Url: 'https://ios-xr.github.io/xrd-eks/helm'
+      Url: 'https://ios-xr.github.io/xrd-eks'
     Singleton:
       Url: 'https://ios-xr.github.io/xrd-helm'
 
@@ -234,7 +233,7 @@ Resources:
     DeletionPolicy: Delete
     Type: 'AWS::CloudFormation::Stack'
     Properties:
-      TemplateURL: !Sub https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-eks-new-vpc-cf.yaml
+      TemplateURL: !Sub 'https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/xrd-eks-new-vpc-cf.yaml'
       Parameters:
         AvailabilityZones: !Join [',', !Ref AvailabilityZones]
         RemoteAccessCIDR: !Ref RemoteAccessCIDR
@@ -246,6 +245,7 @@ Resources:
         MultusCNI: Enabled
         MultusCNIManifestURL: !Ref MultusCNIManifestURL
         KubernetesVersion: !Ref KubernetesVersion
+        EKSAdvancedConfigurationName: !Sub '${EKSClusterName}-cfg'
         XrdS3BucketName: !Ref XrdS3BucketName
         XrdS3KeyPrefix: !Ref XrdS3KeyPrefix
         XrdS3BucketRegion: !Ref XrdS3BucketRegion
@@ -256,7 +256,7 @@ Resources:
     Type: 'AWS::CloudFormation::Stack'
     Properties:
       TemplateURL: !Sub
-        - https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/${TemplateName}.yaml
+        - 'https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}cf-templates/${TemplateName}.yaml'
         - TemplateName: !If [SingletonApplication, xrd-singleton-existing-eks-cf, xrd-overlay-example-existing-eks-cf ]
       Parameters:
         KeyPairName: !Ref KeyPairName

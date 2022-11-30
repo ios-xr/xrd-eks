@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+
+# Publish a container image to an ECR repository.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+show_help() {
+    >&2 echo "Usage: publish-ecr SOURCE_IMAGE [-p PLATFORM] [-t TAG]"
+    >&2 echo ""
+    >&2 echo "Publish an XRd container image to ECR"
+    >&2 echo ""
+    >&2 echo "Required arguments:"
+    >&2 echo " SOURCE_IMAGE         Either a path to a local image tarball or"
+    >&2 echo "                      a URL to an image repository (with tag)"
+    >&2 echo ""
+    >&2 echo "Optional arguments:"
+    >&2 echo " -h, --help               Show this help"
+    >&2 echo " -p, --platform PLATFORM  XRd platform the image is for"
+    >&2 echo "                          (defaults to checking the image name)"
+    >&2 echo " -t, --tag TAG            Override the target image tag"
+    >&2 echo ""
+    >&2 echo "This script requires skopeo when publishing an image archive."
+    >&2 echo "When publishing from a repository, at least one of skopeo,"
+    >&2 echo "docker, or podman must be available."
+}
+
+if [ $# -lt 1 ]; then
+  >&2 echo "Not enough positional arguments specified"
+  show_help
+  exit 1
+fi
+
+SOURCE_IMAGE=$1
+shift
+
+# Parse the arguments
+while [ $# -gt 0 ]; do
+  case $1 in
+    -p|--platform )
+      PLATFORM="$2"
+      shift
+      ;;
+    -t|--tag )
+      TAG_OVERRIDE="$2"
+      shift
+      ;;
+    -h|--help )
+      show_help
+      exit 255
+      ;;
+    * )
+      >&2 echo "Unknown option $1"
+      show_help
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [ -n "${PLATFORM:-}" ]; then
+  if [ "$(echo "$PLATFORM" | tr "[:upper:]" "[:lower:]")" = "vrouter" ]; then
+    TARGET_IMAGE_NAME=xrd/xrd-vrouter
+  elif [ "$(echo "$PLATFORM" | tr "[:upper:]" "[:lower:]")" = "controlplane" ]; then
+    TARGET_IMAGE_NAME=xrd/xrd-control-plane
+  else
+    >&2 echo "Invalid platform: ${PLATFORM}"
+    >&2 echo "Must be either vrouter or controlplane (case-insensitive)"
+    >&2 echo ""
+    show_help
+    exit 1
+  fi
+else
+  case $(tr "[:upper:]" "[:lower:]" <<< "$SOURCE_IMAGE") in
+    *vrouter* )
+      TARGET_IMAGE_NAME=xrd/xrd-vrouter
+      ;;
+    *control-plane*|*controlplane* )
+      TARGET_IMAGE_NAME=xrd/xrd-control-plane
+      ;;
+    * )
+      >&2 echo "Unable to get platform from source image name."
+      >&2 echo "Please specify -p or --platform with the XRd platform name (vrouter or controlplane)"
+      exit 2
+  esac
+fi
+
+ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+AWS_REGION=$(aws configure list | grep region | awk '{print $2}')
+
+TARGET_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+TARGET_REPO="${TARGET_REGISTRY}/${TARGET_IMAGE_NAME}"
+
+# Log into the registry.
+aws ecr get-login-password | docker login --username AWS --password-stdin "${TARGET_REGISTRY}"
+
+# Create the target repository if it doesn't exist.
+aws ecr create-repository --repository-name "${TARGET_REPO}" || true
+
+# Generate out the target image name.
+
+
+if [ -f "$SOURCE_IMAGE" ]; then
+  # Local image archive. Assume the tag is 'latest'.
+  SOURCE_IMAGE_TAG="latest"
+else
+  # Repository URL. Try and extract the tag, if not found assume 'latest'.
+  # Strip the largest prefix before (and including) ':'
+  # This means if no tag is specified, the tag will be set to the full
+  # image name, so check that after.
+  SOURCE_IMAGE_TAG=${SOURCE_IMAGE#*:}
+  if [ "$SOURCE_IMAGE_TAG" = "$SOURCE_IMAGE" ]; then
+    # No tag specificed - assume it's 'latest'.
+    SOURCE_IMAGE_TAG="latest"
+  fi
+fi
+
+TARGET_IMAGE_TAG=${TAG_OVERRIDE:=latest}
+TARGET_IMAGE="${TARGET_REPO}:${TARGET_IMAGE_TAG}"
+
+# Publish the image to ECR.
+if [ -f "$SOURCE_IMAGE" ]; then
+  # Local image archive - only skopeo supported.
+  if which skopeo; then
+    skopeo copy "docker-archive:${SOURCE_IMAGE}" "docker://${TARGET_IMAGE}"
+  else
+    >&2 "Copying local image only supported with skopeo"
+    exit 1
+  fi
+else
+  # Container repo URL. Try skopeo, then docker, then podman.
+  if which skopeo; then
+    skopeo copy "docker://${SOURCE_IMAGE}" "docker://${TARGET_IMAGE}"
+  elif which docker; then
+    docker pull "${SOURCE_IMAGE}"
+    docker tag "${SOURCE_IMAGE}" "${TARGET_IMAGE}"
+    docker push "${TARGET_IMAGE}"
+  elif which podman; then
+    podman pull "${SOURCE_IMAGE}"
+    podman tag "${SOURCE_IMAGE}" "${TARGET_IMAGE}"
+    podman push "${TARGET_IMAGE}"
+  else
+    >&2 echo "None of skopeo, docker, or podman available"
+    exit
+  fi
+fi
+
+echo "Image is now available at ${TARGET_IMAGE}"
