@@ -166,7 +166,8 @@ and an EC2 key pair.
 It also requires the XRd image to be published in the AWS user's ECR
 repository, with the image name `xrd/xrd-vrouter:latest`. This can be
 done by running the `publish-ecr` script to publish an XRd vRouter image
-to the default repository with the tag 'latest'.
+to the default repository with the tag 'latest':
+`publish-ecr <your-image> -t latest`.
 
 ```
 Usage: create-stack -u XR_USERNAME -p XR_PASSWORD -k KEY_PAIR_NAME [-a CUSTOM_AMI_ID]
