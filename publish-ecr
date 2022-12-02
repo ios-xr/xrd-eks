@@ -102,7 +102,7 @@ elif is_in_path "podman"; then
   TOOL=podman
 else
   >&2 echo "None of skopeo, docker, or podman available"
-  exit
+  exit 3
 fi
 
 ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
