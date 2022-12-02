@@ -117,8 +117,6 @@ aws ecr get-login-password | $TOOL login --username AWS --password-stdin "${TARG
 aws ecr create-repository --repository-name "${TARGET_IMAGE_NAME}" || true
 
 # Generate out the target image name.
-
-
 if [ -f "$SOURCE_IMAGE" ]; then
   # Local image archive. Assume the tag is 'latest'.
   SOURCE_IMAGE_TAG="latest"
