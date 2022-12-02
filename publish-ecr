@@ -86,17 +86,35 @@ else
   esac
 fi
 
+# Check if an executable with the given name is in PATH.
+# (without printing anything to console)
+is_in_path () {
+  type -P "$1" &> /dev/null
+}
+
+# Check what tool to use.
+# Ordering is skopeo preferred, then docker, then podman.
+if is_in_path "skopeo"; then
+  TOOL=skopeo
+elif is_in_path "docker"; then
+  TOOL=docker
+elif is_in_path "podman"; then
+  TOOL=podman
+else
+  >&2 echo "None of skopeo, docker, or podman available"
+  exit
+fi
+
 ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 AWS_REGION=$(aws configure list | grep region | awk '{print $2}')
 
 TARGET_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-TARGET_REPO="${TARGET_REGISTRY}/${TARGET_IMAGE_NAME}"
 
 # Log into the registry.
-aws ecr get-login-password | docker login --username AWS --password-stdin "${TARGET_REGISTRY}"
+aws ecr get-login-password | $TOOL login --username AWS --password-stdin "${TARGET_REGISTRY}"
 
 # Create the target repository if it doesn't exist.
-aws ecr create-repository --repository-name "${TARGET_REPO}" || true
+aws ecr create-repository --repository-name "${TARGET_IMAGE_NAME}" || true
 
 # Generate out the target image name.
 
@@ -117,32 +135,24 @@ else
 fi
 
 TARGET_IMAGE_TAG=${TAG_OVERRIDE:=latest}
-TARGET_IMAGE="${TARGET_REPO}:${TARGET_IMAGE_TAG}"
+TARGET_IMAGE="${TARGET_REGISTRY}/${TARGET_IMAGE_NAME}:${TARGET_IMAGE_TAG}"
 
 # Publish the image to ECR.
 if [ -f "$SOURCE_IMAGE" ]; then
   # Local image archive - only skopeo supported.
-  if which skopeo; then
-    skopeo copy "docker-archive:${SOURCE_IMAGE}" "docker://${TARGET_IMAGE}"
-  else
+  if [ $TOOL != "skopeo" ]; then
     >&2 "Copying local image only supported with skopeo"
     exit 1
   fi
+  $TOOL copy "docker-archive:${SOURCE_IMAGE}" "docker://${TARGET_IMAGE}"
 else
-  # Container repo URL. Try skopeo, then docker, then podman.
-  if which skopeo; then
-    skopeo copy "docker://${SOURCE_IMAGE}" "docker://${TARGET_IMAGE}"
-  elif which docker; then
-    docker pull "${SOURCE_IMAGE}"
-    docker tag "${SOURCE_IMAGE}" "${TARGET_IMAGE}"
-    docker push "${TARGET_IMAGE}"
-  elif which podman; then
-    podman pull "${SOURCE_IMAGE}"
-    podman tag "${SOURCE_IMAGE}" "${TARGET_IMAGE}"
-    podman push "${TARGET_IMAGE}"
+  # Container repo URL - all tools supported.
+  if [ $TOOL = "skopeo" ]; then
+    $TOOL copy "docker://${SOURCE_IMAGE}" "docker://${TARGET_IMAGE}"
   else
-    >&2 echo "None of skopeo, docker, or podman available"
-    exit
+    $TOOL pull "${SOURCE_IMAGE}"
+    $TOOL tag "${SOURCE_IMAGE}" "${TARGET_IMAGE}"
+    $TOOL push "${TARGET_IMAGE}"
   fi
 fi
 
