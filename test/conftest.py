@@ -3,6 +3,7 @@
 """Pytest hooks and fixtures."""
 
 import subprocess
+import sys
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -103,6 +104,29 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             metafunc.parametrize("tag", metafunc.config.option.vrouter_tags)
 
 
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
+    """
+    Set the ``result`` attribute on a test item after it has completed the
+    call phase.
+
+    This may be used to implement run-on-failure actions in the test teardown
+    phase.  For example:
+
+    >>> @pytest.fixture
+    ... def teardown(request):
+    ...     yield
+    ...     result = getattr(request.node, "result", None)
+    ...     if result is not None and result.failed:
+    ...         # Run-on-failure.
+
+    """
+    outcome = yield
+    result = outcome.get_result()
+    if result.when == "call":
+        setattr(item, "result", result)
+
+
 @pytest.fixture
 def repository(request: pytest.FixtureRequest) -> str:
     """Returns the (platform-dependent) image repository."""
@@ -163,27 +187,29 @@ def k8s(
 
         test.run()
 
-    # Ensure the Kubernetes config is updated.
-    subprocess.run(
-        [
-            "aws",
-            "eks",
-            "update-kubeconfig",
-            "--region",
-            request.config.option.region,
-            "--name",
-            taskcat_config.config.general.parameters["ClusterName"],
-        ],
-        check=True,
-        capture_output=True,
-    )
+    try:
+        # Ensure the Kubernetes config is updated.
+        subprocess.run(
+            [
+                "aws",
+                "eks",
+                "update-kubeconfig",
+                "--region",
+                request.config.option.region,
+                "--name",
+                taskcat_config.config.general.parameters["ClusterName"],
+            ],
+            check=True,
+            capture_output=True,
+        )
 
-    kubernetes.config.load_kube_config()
+        kubernetes.config.load_kube_config()
 
-    yield kubernetes.client.CoreV1Api()
+        yield kubernetes.client.CoreV1Api()
 
-    if test is not None and not request.config.option.skip_teardown:
-        test.clean_up()
+    finally:
+        if test is not None and not request.config.option.skip_teardown:
+            test.clean_up()
 
 
 @pytest.fixture(scope="session")
@@ -205,6 +231,7 @@ def ensure_xrd_helm_repo_added() -> None:
 
 @pytest.fixture
 def make_release(
+    request: pytest.FixtureRequest,
     k8s: kubernetes.client.CoreV1Api,
 ) -> Callable[[str, dict, int], helm.Helm]:
     """Factory fixture to release a Helm chart.
@@ -246,9 +273,44 @@ def make_release(
 
     yield _make_release
 
-    # Uninstall, and wait for the XRd containers to terminate before
-    # returning.
     if release is not None and xrd_pods is not None:
+        xrd_pods = _common.get_running_xrd_pods(k8s)
+
+        # Run some diagnostics if the test case failed.
+        result = getattr(request.node, "result", None)
+        if result is not None and result.failed:
+            for xrd_pod in xrd_pods:
+                print(
+                    _common.container_exec(
+                        k8s,
+                        xrd_pod,
+                        ["/pkg/bin/xrenv", "show_logging"],
+                    ),
+                    file=sys.stderr,
+                )
+                print(
+                    _common.container_exec(
+                        k8s,
+                        xrd_pod,
+                        ["/pkg/bin/xrenv", "show_ip_interface", "-b"],
+                    ),
+                    file=sys.stderr,
+                )
+                print(
+                    k8s.read_namespaced_pod(
+                        name=xrd_pod.metadata.name, namespace="default"
+                    ),
+                    file=sys.stderr,
+                )
+                print(
+                    k8s.read_namespaced_pod_log(
+                        name=xrd_pod.metadata.name, namespace="default"
+                    ),
+                    file=sys.stderr,
+                )
+
         release.uninstall()
+
+        # Wait for all running XRd containers to terminate before returning.
         for xrd_pod in xrd_pods:
             _common.assert_pod_terminated(k8s, xrd_pod)
