@@ -20,11 +20,13 @@ general:
     RemoteAccessCIDR: "0.0.0.0/0"
     EKSPublicAccessEndpoint: Enabled
 
+    Platform: VRouter
+
 
 project:
   # Sets key prefix for all files within an S3 bucket.
   # This must be kept in sync with publish-s3-bucket and create-stack
-  name: 'dev'
+  name: xrd-eks
 
 tests:
   # Example to create an AMI suitable for XRd vRouter.
