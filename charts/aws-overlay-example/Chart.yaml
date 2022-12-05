@@ -25,11 +25,11 @@ appVersion: "latest"
 
 dependencies:
 - name: xrd-vrouter
-  version: ">= 1.0.0"
+  version: "~1.0.0-0"
   repository: "https://ios-xr.github.io/xrd-helm"
   alias: xrd1
 - name: xrd-vrouter
-  version: ">= 1.0.0"
+  version: "~1.0.0-0"
   repository: "https://ios-xr.github.io/xrd-helm"
   alias: xrd2
 - name: simple-host
