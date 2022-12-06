@@ -135,13 +135,13 @@ def repository(request: pytest.FixtureRequest) -> str:
     assert (
         "control_plane" in marks or "vrouter" in marks,
         "Nodes using the `repository` fixture must be marked `control_plane` "
-        "or `vrouter`"
+        "or `vrouter`",
     )
 
     assert (
         not ("control_plane" in marks and "vrouter" in marks),
         "Nodes using the `repository` fixture must not be marked both "
-        "`control_plane` and `vrouter`"
+        "`control_plane` and `vrouter`",
     )
 
     if "control_plane" in marks:
