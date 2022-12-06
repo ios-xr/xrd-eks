@@ -118,7 +118,7 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
     ...     yield
     ...     result = getattr(request.node, "result", None)
     ...     if result is not None and result.failed:
-    ...         # Run-on-failure.
+    ...         # Commands to run-on-failure.
 
     """
     outcome = yield

@@ -20,8 +20,10 @@ general:
     RemoteAccessCIDR: "0.0.0.0/0"
     EKSPublicAccessEndpoint: Enabled
 
+    # This should not be necessary (for overlay applications), but taskcat
+    # requires all parameters are provided, even if they are conditionally
+    # not required.
     Platform: VRouter
-
 
 project:
   # Sets key prefix for all files within an S3 bucket.
