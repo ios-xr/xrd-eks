@@ -22,7 +22,7 @@ from tenacity import (
 def get_running_xrd_pods(
     k8s: kubernetes.client.CoreV1Api,
     *,
-    num_expected: Optional[int],
+    num_expected: Optional[int] = None,
 ) -> list[kubernetes.client.V1Pod]:
     """Returns a list of running XRd pods.
 

@@ -44,6 +44,7 @@ class Helm:
                 "-f",
                 f.name,
                 "--reuse-values",
+                "--devel",
             )
 
     def rollback(self, *, revision: int = 1) -> None:
@@ -66,6 +67,7 @@ def install(
         "-o",
         "json",
         "--dependency-update",
+        "--devel",
     ]
 
     with tempfile.NamedTemporaryFile(mode="w") as f:
