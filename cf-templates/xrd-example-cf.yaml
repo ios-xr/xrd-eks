@@ -165,13 +165,13 @@ Parameters:
   # These are required while the CF templates are manually uploaded to S3.
   XrdS3BucketName:
     Type: String
-    Description: 'Use the "Bucket Name" output from publish-templates.sh'
+    Description: 'Use the "Bucket Name" output from publish-s3-bucket'
   XrdS3KeyPrefix:
     Type: String
-    Description: 'Use the "Bucket Key Prefix" output from publish-templates.sh'
+    Description: 'Use the "Bucket Key Prefix" output from publish-s3-bucket'
   XrdS3BucketRegion:
     Type: String
-    Description: 'Use the "Bucket Region" output from publish-templates.sh'
+    Description: 'Use the "Bucket Region" output from publish-s3-bucket'
 
   # From xrd-overlay-example-existing-vpc
 
