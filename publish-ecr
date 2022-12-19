@@ -32,8 +32,7 @@ if [ $# -lt 1 ]; then
   exit 1
 fi
 
-SOURCE_IMAGE=$1
-shift
+POSITIONAL_ARGS=()
 
 # Parse the arguments
 while [ $# -gt 0 ]; do
@@ -50,14 +49,25 @@ while [ $# -gt 0 ]; do
       show_help
       exit 255
       ;;
-    * )
+    -* )
       >&2 echo "Unknown option $1"
       show_help
       exit 1
       ;;
+    * )
+      POSITIONAL_ARGS+=("$1")
+      ;;
   esac
   shift
 done
+
+if [ ${#POSITIONAL_ARGS[@]} -ne 1 ]; then
+  >&2 echo "Exactly one positional arg required: SOURCE_IMAGE"
+  show_help
+  exit 1
+fi
+
+SOURCE_IMAGE=${POSITIONAL_ARGS[1]}
 
 if [ -n "${PLATFORM:-}" ]; then
   if [ "$(echo "$PLATFORM" | tr "[:upper:]" "[:lower:]")" = "vrouter" ]; then
