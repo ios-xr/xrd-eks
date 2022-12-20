@@ -20,17 +20,12 @@ show_help() {
     >&2 echo " -p, --platform PLATFORM  XRd platform the image is for"
     >&2 echo "                          (defaults to checking the image name)"
     >&2 echo " -t, --tag TAG            Override the target image tag"
+    >&2 echo "                          (defaults to 'latest')"
     >&2 echo ""
     >&2 echo "This script requires skopeo when publishing an image archive."
     >&2 echo "When publishing from a repository, at least one of skopeo,"
     >&2 echo "docker, or podman must be available."
 }
-
-if [ $# -lt 1 ]; then
-  >&2 echo "Not enough positional arguments specified"
-  show_help
-  exit 1
-fi
 
 POSITIONAL_ARGS=()
 
@@ -67,7 +62,7 @@ if [ ${#POSITIONAL_ARGS[@]} -ne 1 ]; then
   exit 1
 fi
 
-SOURCE_IMAGE=${POSITIONAL_ARGS[1]}
+SOURCE_IMAGE=${POSITIONAL_ARGS[0]}
 
 if [ -n "${PLATFORM:-}" ]; then
   if [ "$(echo "$PLATFORM" | tr "[:upper:]" "[:lower:]")" = "vrouter" ]; then
