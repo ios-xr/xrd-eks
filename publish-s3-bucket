@@ -8,6 +8,28 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+show_help() {
+    >&2 echo "Usage: publish-s3-bucket [-h]"
+    >&2 echo ""
+    >&2 echo "Publish an S3 bucket with the resources from this repository."
+    >&2 echo "Must be run from the root of the xrd-eks repository."
+}
+
+# Parse the arguments
+while [ $# -gt 0 ]; do
+  case $1 in
+    -h|--help )
+      show_help
+      exit 255
+      ;;
+    * )
+      >&2 echo "Unknown option $1"
+      show_help
+      exit 1
+      ;;
+  esac
+done
+
 ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 BUCKET_NAME=${BUCKET_NAME:-"${ACCOUNT_ID}-xrd-quickstart"}
 BUCKET_KEY_PREFIX=${BUCKET_KEY_PREFIX:-"xrd-eks/"}
