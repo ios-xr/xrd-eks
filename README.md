@@ -1,41 +1,48 @@
 # XRd on AWS EKS
 
-This repo contains resources and samples for using XRd with AWS EKS, including
-a set of CloudFormation charts that can be used to launch a sample deployment.
+This repository contains resources and samples for using XRd with AWS EKS.
 
 These are intended to be used for two purposes:
   - As an illustrative example of what's needed to set up XRd in AWS EKS.
   - As a simple way to launch a dummy XRd deployment in AWS for
     experimentation and exploration.
 
-These are specifically __not__ intended for use in production deployments.
+The resources are  __not__ intended for use in production deployments.
+
+This readme covers the resources in detail.
+To skim over this and just launch a dummy XRd deployment with the default
+configuration, the [QuickStart](QuickStart) page is has simple instructions
+to follow.
 
 ## Getting Started
+
+Sample CloudFormation templates to run XRd in EKS can be found in the
+`cf-templates` folder of this repository. These have several requirements
+that are outlined in the next section.
 
 ### Prerequisites
 
 This section covers the preparatory steps required before you can instantiate
-XRd via the CloudFormation templates, and the values which will be needed to
-fill in the templates.
+XRd via the CloudFormation templates.
 
-Note: The examples below are illustrative of the values needed to fill in the
-templates and will not work for other users.  Each step requires individual action.
+The following are mandatory requirements:
 
-The following are mandatory requirements to proceed:
-
- * [X] An ECR [Image Repository](#image-repository) with XRd images loaded.
- * [X] Access to the public [XRd Helm Repository](https://ios-xr.github.io/xrd-helm)
- * [X] Access to the public [XRd on AWS Helm Repository](https://ios-xr.github.io/xrd-eks)
- * [X] An [S3 Bucket] containing the following resources from this repository:
+ * [X] An AWS account with administrator permissions (must be able to create
+   IAM roles and EKS clusters)
+ * [X] An [ECR Image Repository](#ecr-repository) with XRd images loaded
+ * [X] An [S3 Bucket](#s3-bucket) containing the following resources from
+   this repository:
    * CloudFormation templates
    * AMI Assets
  * [X] An [AWS key pair name](#aws-key-pair-name)
  * [X] The following [Tooling](#tooling)
    * The `aws` CLI
 
-
 The following are optional:
- * [X] An additional [User or Role ARN](#additional-arns) with EKS admin privileges
+
+ * [X] An additional [User or Role ARN](#additional-arns) with EKS admin
+       privileges, if the users other than the user creating the cluster
+       require access to it.
  * [X] Additional [tooling](#tooling):
    * `helm` (recommended)
    * `kubectl` (recommended)
@@ -45,25 +52,35 @@ The following are optional:
 
 More details are provided for each below.
 
-#### Image Repository
+#### AWS Account
+
+The example CloudFormation templates create a new VPC and EKS cluster to
+run XRd in. This means the user running the templates must have the
+appropriate permissions to create a new EKS cluster, which in this case
+also means creating an IAM role for the cluster.
+
+These permissions are known to be covered by the default `AdministratorAccess`
+IAM policy, it may also be possible to restrict permissions further.
+
+#### ECR Repository
 
 EKS needs to pull the XRd image from a container image repository which is
-accessible to AWS.
+accessible to AWS EC2 worker nodes.
 
-Cisco does not currently provide an external container registry and so this
-involves creating a repository using AWS's ECR (Elastic Container Registry)
-service.
+Cisco does not currently provide an external container registry, so the
+approach here involves creating a repository using AWS's
+ECR (Elastic Container Registry) service.
 
-External users will need to download XRd images from
+Users will need to download XRd images from
 [Cisco](https://www.cisco.com/c/en/us/support/routers/ios-xrd/series.html#~tab-downloads)
-and manually upload them to the ECR repo.
+and upload them to the ECR repo.
 
 The `publish-ecr` script is provided in this repo to create an ECR bucket
 with the recommended name and upload a user-provided image to it.
 
 #### S3 Bucket
 
-The XRd templates require an AWS S3 bucket containing:
+The CloudFormation templates require an AWS S3 bucket containing:
   - The CloudFormation templates
   - The AMI assets
 
@@ -74,17 +91,18 @@ The AMI Assets are required so an AMI suitable for running XRd vRouter
 can be created as part of the CloudFormation stack.
 
 The `publish-s3-bucket` script is provided in this repo to set up an
-S3 bucket, creating it and configuring permissions if required. The script
-outputs values to be used in the CloudFormation templates.
+S3 bucket, including creating it and configuring permissions if required,
+and then populating it.
+The script outputs values to be used in the CloudFormation templates.
 
 The main CloudFormation template is subsequently available at a location
-similar to [https://<userid>-xrd-quickstart.s3.<region>.amazonaws.com/xrd-eks/cf-templates/xrd-example-cf.yaml].
+similar to `https://<userid>-xrd-quickstart.s3.<region>.amazonaws.com/xrd-eks/cf-templates/xrd-example-cf.yaml`.
 Other templates are in the same directory.
 
 #### AWS Key Pair name
 
 An AWS key pair is required to access to Bastion and Worker nodes created by
-the stack, and indeed is a standard AWS requirement to launch any EC2 Instance.
+the stack, and indeed is a standard AWS requirement to launch any EC2 instance.
 
 See https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/create-key-pairs.html for more details.
 
@@ -109,19 +127,25 @@ In addition to these requirements, it can be helpful to have `helm` and
 
 The tools must be set up correctly, including setting the AWS context.
 
-### First application launch
+### Launching the example XRd stack
 
-This example instantiates the `xrd-example` stack.
+This section covers launching the `xrd-example` stack.
 
 The user has the choice of two applications:
 
 * Singleton - A single XRd instance of desired platform type (vRouter or Control Plane)
 * Overlay - Two XRd routers illustrating an L3VPN overlay over the AWS network.
 
+The next section covers launching this using the AWS console. This
+repository also contains a helper script (`create-stack`) to launch
+and example stack using some default values, as described on the
+[Quick Start](QuickStart) page.
+
 #### AWS Console
 
 * Navigate to 'Create Stack' within the AWS console
-* Fill in the Amazon S3 URL field specifying the name of the bucket you created e.g. `<https://<userid>-xrd-quickstart.s3.<region>.amazonaws.com/xrd-eks/cf-templates/xrd-example.yaml>`
+* Fill in the Amazon S3 URL field specifying the name of the bucket you created
+  e.g. `<https://<userid>-xrd-quickstart.s3.<region>.amazonaws.com/xrd-eks/cf-templates/xrd-example.yaml>`
 
 * Click Next
 * Fill in the following parameters:
@@ -154,26 +178,6 @@ as follows:
   * `aws eks update-kubeconfig --name xrd-cluster`
   * `kubectl exec xrd-example-0 -it -- xr`
     * For lab usage only - use ssh in deployment
-
-#### CLI
-
-The `create-stack` script (part of this repo) creates the
-stack from the command line.
-
-This script has three required arguments: an XR root username and password,
-and an EC2 key pair.
-
-It also requires the XRd image to be published in the AWS user's ECR
-repository, with the image name `xrd/xrd-vrouter:latest`. This can be
-done by running the `publish-ecr` script to publish an XRd vRouter image
-to the default repository with the tag 'latest':
-`publish-ecr <your-image> -t latest`.
-
-```
-Usage: create-stack -u XR_USERNAME -p XR_PASSWORD -k KEY_PAIR_NAME [-a CUSTOM_AMI_ID]
-
-Create an example XRd CF stack
-```
 
 ## List of Templates
 
