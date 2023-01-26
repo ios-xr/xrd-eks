@@ -224,8 +224,14 @@ Parameters:
   SkipHelmRelease:
     Type: String
     AllowedValues: [ "Yes", "No" ]
-    Default: "No"
+    Default: "Yes"
     Description: Specify Yes to avoid installing the helm chart and just create the underlying infrastructure
+
+  KubernetesVersion:
+    Type: String
+    AllowedValues: [ "1.22", "1.23" ]
+    Default: "1.22"
+    Description: Kubernetes control plane version.
 
 Conditions:
   XrdInterface1Required: !Not [ !Equals [ !Ref XrdInterface1SubnetTagValue, '' ] ]
@@ -330,6 +336,7 @@ Resources:
         EKSClusterName: !Ref EKSClusterName
         WorkerNodeName: !Ref WorkerNodeName
         NodeIP: !Ref NodeIP
+        KubernetesVersion: !Ref KubernetesVersion
 
         XrdInterface1SubnetTagValue: !Ref XrdInterface1SubnetTagValue
         XrdInterface1IP: !If [ XrdInterface1IPSpecified, !Select [ 0, !Split [ '/', !Ref XrdInterface1IP ]], !Ref AWS::NoValue ]

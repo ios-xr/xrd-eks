@@ -139,7 +139,7 @@ Parameters:
   SkipHelmRelease:
     Type: String
     AllowedValues: [ "Yes", "No" ]
-    Default: "No"
+    Default: "Yes"
     Description: Specify Yes to avoid installing the helm chart and just create the underlying infrastructure
 
 

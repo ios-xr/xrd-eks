@@ -245,6 +245,12 @@ Parameters:
     # Default: TBD
     Type: String
 
+  KubernetesVersion:
+    Type: String
+    AllowedValues: [ "1.22", "1.23" ]
+    Default: "1.22"
+    Description: Kubernetes control plane version.
+
 Conditions:
   # Interface attachment needs to be serialized to ensure the interfaces are
   # attached to the instances in a deterministic order, and so the PCI IDs are
@@ -310,6 +316,7 @@ Resources:
         XrdS3BucketName: !Ref XrdS3BucketName
         XrdS3BucketRegion: !Ref XrdS3BucketRegion
         XrdS3KeyPrefix: !Ref XrdS3KeyPrefix
+        KubernetesVersion: !Ref KubernetesVersion
   Instance:
     Type: AWS::EC2::Instance
     Properties:
