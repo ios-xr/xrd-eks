@@ -86,7 +86,7 @@ Parameters:
 
   KubernetesVersion:
     Type: String
-    AllowedValues: [ "1.22" ]
+    AllowedValues: [ "1.22", "1.23" ]
     Default: "1.22"
     Description: Kubernetes control plane version.
 
@@ -280,6 +280,106 @@ Resources:
       ServiceToken: !GetAtt KubectlFunction.Arn
       ClusterName: !Ref EKSClusterName
       Command: !Sub "apply -f ${MultusCNIManifestURL}"
+
+  ##################
+  # EBS CSI plugin #
+  ##################
+
+  GetThumbprintsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AWSLambdaExecute"
+
+  GetThumbprints:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: |
+          const crypto = require("crypto")
+          const https = require("https");
+          const cfn_response = require("cfn-response")
+          exports.handler = function(event, context) {
+            const url = new URL(event.ResourceProperties.OIDCIssuerURL)
+            const request = https.get(url, function(response) {
+              var cert = response.connection.getPeerCertificate(true)
+              var thumbprints = []
+              while (true) {
+                var shasum = crypto.createHash("sha1")
+                shasum.update(cert.raw)
+                thumbprints.push(shasum.digest("hex"))
+                if (!cert.issuerCertificate || cert == cert.issuerCertificate) {
+                  break
+                }
+                cert = cert.issuerCertificate
+              }
+              var data = {Thumbprints: thumbprints.slice(-5)}
+              cfn_response.send(event, context, cfn_response.SUCCESS, data);
+            });
+            request.end()
+          };
+
+      Handler: index.handler
+      Runtime: nodejs18.x
+      Role: !GetAtt GetThumbprintsExecutionRole.Arn
+
+  ExecuteGetThumbprints:
+    Type: Custom::ExecuteGetThumbprints
+    Properties:
+      ServiceToken: !GetAtt GetThumbprints.Arn
+      OIDCIssuerURL: !GetAtt EKSStack.Outputs.OIDCIssuerURL
+
+  OIDCProvider:
+    Type: "AWS::IAM::OIDCProvider"
+    Properties:
+      ClientIdList:
+        - sts.amazonaws.com
+      Url: !GetAtt EKSStack.Outputs.OIDCIssuerURL
+      ThumbprintList: !GetAtt ExecuteGetThumbprints.Thumbprints
+
+  EBSCSIDriverRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: !Sub
+        - |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Federated": "${OIDCProviderArn}"
+                },
+                "Action": "sts:AssumeRoleWithWebIdentity",
+                "Condition": {
+                  "StringEquals": {
+                    "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDC}:sub": "system:serviceaccount:kube-system:ebs-csi-controller-sa",
+                    "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDC}:aud": "sts.amazonaws.com"
+                  }
+                }
+              }
+            ]
+          }
+        - OIDCProviderArn: !Ref OIDCProvider
+          OIDC: !Select [3, !Split ["/", !Ref OIDCProvider]]
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+
+  EBSCSIPlugin:
+    Type: "AWS::EKS::Addon"
+    Properties:
+      AddonName: "aws-ebs-csi-driver"
+      ClusterName: "xrd-cluster"
+      ServiceAccountRoleArn: !Sub
+        - "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${RoleName}"
+        - RoleName: !Ref EBSCSIDriverRole
 
 Outputs:
   EKSClusterName:
