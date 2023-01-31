@@ -162,8 +162,7 @@ Resources:
     Metadata:
       cfn-lint: { config: { ignore_checks: [ W9901 ] } }
     Properties:
-      #TemplateURL: !Sub 'https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}submodules/quickstart-amazon-eks/submodules/quickstart-aws-vpc/templates/aws-vpc.template.yaml'
-      TemplateURL: https://s3.amazonaws.com/aws-quickstart/quickstart-aws-vpc/templates/aws-vpc.template.yaml
+      TemplateURL: !Sub "https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}submodules/quickstart-aws-vpc/templates/aws-vpc.template.yaml"
 
       Parameters:
         AvailabilityZones: !Join [ ',', !Ref 'AvailabilityZones' ]

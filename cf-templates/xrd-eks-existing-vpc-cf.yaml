@@ -103,7 +103,7 @@ Resources:
   AutoDetectSharedResources:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Sub 'https://aws-quickstart-${AWS::Region}.s3.${AWS::Region}.${AWS::URLSuffix}/quickstart-amazon-eks/templates/amazon-eks-prerequisites.template.yaml'
+      TemplateURL: !Sub "https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}submodules/quickstart-amazon-eks/templates/amazon-eks-prerequisites.template.yaml"
       Parameters:
         Version: "1.0.0"
         AccountTemplateUri: !Sub 'https://aws-quickstart-${AWS::Region}.s3.${AWS::Region}.${AWS::URLSuffix}/quickstart-amazon-eks/templates/amazon-eks-per-account-resources.template.yaml'
@@ -123,7 +123,7 @@ Resources:
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
     Properties:
-      TemplateURL: https://s3.amazonaws.com/aws-quickstart/quickstart-amazon-eks/templates/amazon-eks-advanced-configuration.template.yaml
+      TemplateURL: !Sub "https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}submodules/quickstart-amazon-eks/templates/amazon-eks-advanced-configuration.template.yaml"
       Parameters:
         ConfigSetName: !Ref EKSAdvancedConfigurationName
         # Without this EKS stack creation is failing.  Unclear why.
@@ -140,7 +140,7 @@ Resources:
     Metadata:
       cfn-lint: { config: { ignore_checks: [ W9901 ] } }
     Properties:
-      TemplateURL: https://s3.amazonaws.com/aws-quickstart/quickstart-amazon-eks/templates/amazon-eks-entrypoint-existing-vpc.template.yaml
+      TemplateURL: !Sub "https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}submodules/quickstart-amazon-eks/templates/amazon-eks-entrypoint-existing-vpc.template.yaml"
       Parameters:
         RemoteAccessCIDR: !Ref RemoteAccessCIDR
         EKSPublicAccessEndpoint: !Ref EKSPublicAccessEndpoint
