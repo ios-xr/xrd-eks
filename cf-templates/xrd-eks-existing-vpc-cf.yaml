@@ -133,7 +133,9 @@ Resources:
       TemplateURL: !Sub "https://${XrdS3BucketName}.s3.${XrdS3BucketRegion}.${AWS::URLSuffix}/${XrdS3KeyPrefix}submodules/quickstart-amazon-eks/templates/amazon-eks-advanced-configuration.template.yaml"
       Parameters:
         ConfigSetName: !Ref EKSAdvancedConfigurationName
-        # Without this EKS stack creation is failing.  Unclear why.
+        # Without this EKS stack creation fails because the transitive resource
+        # EKSStack:EKSStack:AwsNodeIrsa requires at least one worker node to be
+        # present.
         IamOidcProvider: "Disabled"
         KubernetesVersion: !Ref KubernetesVersion
 
