@@ -171,6 +171,9 @@ Resources:
         PerRegionSharedResources: 'No'
         KeyPairName: !Ref KeyPairName
         NodeGroupType: Unmanaged
+        QSS3BucketName: !Ref XrdS3BucketName
+        QSS3BucketRegion: !Ref XrdS3BucketRegion
+        QSS3KeyPrefix: !Sub "${XrdS3KeyPrefix}submodules/quickstart-amazon-eks/"
 
   GetKubectlLayerArn:
     DependsOn:
