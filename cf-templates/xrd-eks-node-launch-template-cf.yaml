@@ -106,7 +106,7 @@ Parameters:
     Description: "(Optional) Isolated cores on machine, e.g. '1, 4-5'.  If not specified no cores are isolated. Ignored if platform is ControlPlane or CustomAmiId provided."
   KubernetesVersion:
     Type: String
-    AllowedValues: [ "1.22", "1.23", "1.24" ]
+    AllowedValues: [ "1.22", "1.23" ]
     Default: "1.22"
     Description: Kubernetes control plane version.
 

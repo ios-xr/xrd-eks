@@ -247,7 +247,7 @@ Parameters:
 
   KubernetesVersion:
     Type: String
-    AllowedValues: [ "1.22", "1.23", "1.24" ]
+    AllowedValues: [ "1.22", "1.23" ]
     Default: "1.22"
     Description: Kubernetes control plane version.
 
