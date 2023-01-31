@@ -126,15 +126,15 @@ Parameters:
     Type: String
     Default: "10.0.14.0/24"
 
-  # XrdS3BucketName:
-  #   # Default: TBD
-  #   Type: String
-  # XrdS3KeyPrefix:
-  #   # Default: TBD
-  #   Type: String
-  # XrdS3BucketRegion:
-  #   # Default: TBD
-  #   Type: String
+  XrdS3BucketName:
+    # Default: TBD
+    Type: String
+  XrdS3KeyPrefix:
+    # Default: TBD
+    Type: String
+  XrdS3BucketRegion:
+    # Default: TBD
+    Type: String
 
 
 Conditions:

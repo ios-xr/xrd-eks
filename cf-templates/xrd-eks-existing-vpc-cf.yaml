@@ -95,6 +95,13 @@ Parameters:
     Type: String
     Description: "(Optional) Name of EKS Advanced Configuration table"
 
+  XrdS3BucketName:
+    Type: String
+  XrdS3KeyPrefix:
+    Type: String
+  XrdS3BucketRegion:
+    Type: String
+
 Conditions:
   EnableMultusCNI: !Equals [!Ref 'MultusCNI', 'Enabled']
 
