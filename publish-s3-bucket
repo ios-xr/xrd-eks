@@ -37,6 +37,7 @@ BUCKET_KEY_PREFIX=${BUCKET_KEY_PREFIX:-"xrd-eks/"}
 AWS_REGION=${AWS_REGION:-$(aws configure get region)}
 
 CF_DIR=cf-templates
+SUBMODULES_DIR=submodules
 AMI_ASSETS_DIR=ami_assets
 
 create_bucket() {
@@ -78,6 +79,11 @@ create_bucket
 
 echo "Syncing CF templates to bucket..."
 sync_dir ${CF_DIR}
+
+echo "Syncing submodule templates to bucket..."
+for dir in $(find ${SUBMODULES_DIR} -type d -name templates); do
+    sync_dir $dir
+done
 
 echo "Syncing AMI assets to bucket..."
 sync_dir ${AMI_ASSETS_DIR}
