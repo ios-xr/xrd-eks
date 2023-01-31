@@ -281,11 +281,7 @@ Resources:
       ClusterName: !Ref EKSClusterName
       Command: !Sub "apply -f ${MultusCNIManifestURL}"
 
-  ##################
-  # EBS CSI plugin #
-  ##################
-
-  GetThumbprintsExecutionRole:
+  GetThumbprintExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -298,7 +294,7 @@ Resources:
       ManagedPolicyArns:
         - !Sub "arn:${AWS::Partition}:iam::aws:policy/AWSLambdaExecute"
 
-  GetThumbprints:
+  GetThumbprint:
     Type: "AWS::Lambda::Function"
     Properties:
       Code:
@@ -320,7 +316,7 @@ Resources:
                 }
                 cert = cert.issuerCertificate
               }
-              var data = {Thumbprints: thumbprints.slice(-5)}
+              var data = {Thumbprint: thumbprints.slice(-2)[0]}
               cfn_response.send(event, context, cfn_response.SUCCESS, data);
             });
             request.end()
@@ -328,12 +324,12 @@ Resources:
 
       Handler: index.handler
       Runtime: nodejs18.x
-      Role: !GetAtt GetThumbprintsExecutionRole.Arn
+      Role: !GetAtt GetThumbprintExecutionRole.Arn
 
-  ExecuteGetThumbprints:
-    Type: Custom::ExecuteGetThumbprints
+  ExecuteGetThumbprint:
+    Type: Custom::ExecuteGetThumbprint
     Properties:
-      ServiceToken: !GetAtt GetThumbprints.Arn
+      ServiceToken: !GetAtt GetThumbprint.Arn
       OIDCIssuerURL: !GetAtt EKSStack.Outputs.OIDCIssuerURL
 
   OIDCProvider:
@@ -342,9 +338,10 @@ Resources:
       ClientIdList:
         - sts.amazonaws.com
       Url: !GetAtt EKSStack.Outputs.OIDCIssuerURL
-      ThumbprintList: !GetAtt ExecuteGetThumbprints.Thumbprints
+      ThumbprintList:
+        - !GetAtt ExecuteGetThumbprint.Thumbprint
 
-  EBSCSIDriverRole:
+  AmazonEksEbsCsiDriverRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument: !Sub
@@ -360,26 +357,26 @@ Resources:
                 "Action": "sts:AssumeRoleWithWebIdentity",
                 "Condition": {
                   "StringEquals": {
-                    "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDC}:sub": "system:serviceaccount:kube-system:ebs-csi-controller-sa",
-                    "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDC}:aud": "sts.amazonaws.com"
+                    "${OIDCProviderEndpoint}:sub": "system:serviceaccount:kube-system:ebs-csi-controller-sa",
+                    "${OIDCProviderEndpoint}:aud": "sts.amazonaws.com"
                   }
                 }
               }
             ]
           }
-        - OIDCProviderArn: !Ref OIDCProvider
-          OIDC: !Select [3, !Split ["/", !Ref OIDCProvider]]
+        - OIDCProviderArn: !GetAttr OIDCProvider.Arn
+          OIDCProviderEndpoint: !Join
+            - ""
+            - !Split ["https://", !GetAtt EKSStack.Outputs.OIDCIssuerURL]
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
 
-  EBSCSIPlugin:
+  AmazonEksEbsCsiDriverAddon:
     Type: "AWS::EKS::Addon"
     Properties:
       AddonName: "aws-ebs-csi-driver"
-      ClusterName: "xrd-cluster"
-      ServiceAccountRoleArn: !Sub
-        - "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${RoleName}"
-        - RoleName: !Ref EBSCSIDriverRole
+      ClusterName: !GetAtt EKSStack.Outputs.EKSClusterName
+      ServiceAccountRoleArn: !GetAtt AmazonEksEbsCsiDriverRole.Arn
 
 Outputs:
   EKSClusterName:
