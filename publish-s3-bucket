@@ -37,8 +37,8 @@ BUCKET_KEY_PREFIX=${BUCKET_KEY_PREFIX:-"xrd-eks/"}
 AWS_REGION=${AWS_REGION:-$(aws configure get region)}
 
 CF_DIR=cf-templates
-SUBMODULES_DIR=submodules
 AMI_ASSETS_DIR=ami_assets
+SUBMODULES_DIR=submodules
 
 create_bucket() {
     if [ "${AWS_REGION}" != "us-east-1" ]; then
@@ -80,13 +80,25 @@ create_bucket
 echo "Syncing CF templates to bucket..."
 sync_dir ${CF_DIR}
 
-echo "Syncing submodule templates to bucket..."
-for dir in $(find ${SUBMODULES_DIR} -type d -name templates); do
-    sync_dir $dir
-done
-
 echo "Syncing AMI assets to bucket..."
 sync_dir ${AMI_ASSETS_DIR}
+
+echo "Syncing submodules to bucket..."
+sync_dir ${SUBMODULES_DIR}
+
+# Copy a packaged lambda in the QuickStart bucket to the XRd bucket.
+copy_quickstart_package() {
+    local KEY=$1
+    aws s3 cp --copy-props none \
+        "s3://aws-quickstart-${AWS_REGION}/${KEY}" \
+        "s3://${BUCKET_NAME}/${BUCKET_KEY_PREFIX}submodules/${KEY}"
+}
+
+echo "Copying QuickStart packages to bucket..."
+copy_quickstart_package "quickstart-amazon-eks/functions/packages/kubernetesResources/awsqs_kubernetes_get_vpc.zip"
+copy_quickstart_package "quickstart-amazon-eks/functions/packages/kubernetesResources/awsqs_kubernetes_apply_vpc.zip"
+copy_quickstart_package "quickstart-amazon-eks/functions/packages/KubeManifest/lambda.zip"
+copy_quickstart_package "quickstart-amazon-eks/functions/packages/KubeGet/lambda.zip"
 
 # Output the details to be used in the CF stacks.
 echo ""
