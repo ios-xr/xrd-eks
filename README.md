@@ -23,6 +23,7 @@ templates and will not work for other users.  Each step requires individual acti
 
 The following are mandatory requirements to proceed:
 
+ * [X] Submodules in this repository must be checked out recursively.
  * [X] An ECR [Image Repository](#image-repository) with XRd images loaded.
  * [X] Access to the public [XRd Helm Repository](https://ios-xr.github.io/xrd-helm)
  * [X] Access to the public [XRd on AWS Helm Repository](https://ios-xr.github.io/xrd-eks)
@@ -44,6 +45,14 @@ The following are optional:
    * `podman`
 
 More details are provided for each below.
+
+### Submodules
+
+All submodules in this git repository must be checked out recursively.
+
+```
+git submodule update --init --recursive
+```
 
 #### Image Repository
 
