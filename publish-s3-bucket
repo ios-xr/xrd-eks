@@ -38,13 +38,10 @@ AWS_REGION=${AWS_REGION:-$(aws configure get region)}
 
 CF_DIR=cf-templates
 AMI_ASSETS_DIR=ami_assets
+SUBMODULES_DIR=submodules
 
 create_bucket() {
-    if [ "${AWS_REGION}" != "us-east-1" ]; then
-        aws s3api create-bucket --bucket "${BUCKET_NAME}" --create-bucket-configuration "{ \"LocationConstraint\": \"${AWS_REGION}\" }"
-    else
-        aws s3api create-bucket --bucket "${BUCKET_NAME}"
-    fi
+    aws s3api head-bucket --bucket "${BUCKET_NAME}" >/dev/null || aws s3api create-bucket --bucket "${BUCKET_NAME}" --create-bucket-configuration "{ \"LocationConstraint\": \"${AWS_REGION}\" }"
 
     POLICY='{
         "Version": "2012-10-17",
@@ -81,6 +78,14 @@ sync_dir ${CF_DIR}
 
 echo "Syncing AMI assets to bucket..."
 sync_dir ${AMI_ASSETS_DIR}
+
+echo "Syncing submodules to bucket..."
+sync_dir ${SUBMODULES_DIR}
+
+echo "Syncing QuickStart packages to bucket..."
+aws s3 sync --delete --metadata-directive REPLACE \
+    "s3://aws-quickstart-${AWS_REGION}/quickstart-amazon-eks/functions/packages" \
+    "s3://${BUCKET_NAME}/${BUCKET_KEY_PREFIX}submodules/quickstart-amazon-eks/functions/packages"
 
 # Output the details to be used in the CF stacks.
 echo ""

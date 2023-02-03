@@ -189,6 +189,9 @@ Resources:
         XrdSubnet4CIDR: !Ref XrdSubnet4CIDR
         XrdSubnet5CIDR: !Ref XrdSubnet5CIDR
         XrdSubnet6CIDR: !Ref XrdSubnet6CIDR
+        XrdS3BucketName: !Ref XrdS3BucketName
+        XrdS3KeyPrefix: !Ref XrdS3KeyPrefix
+        XrdS3BucketRegion: !Ref XrdS3BucketRegion
 
   EKSStack:
     Type: AWS::CloudFormation::Stack
@@ -211,6 +214,9 @@ Resources:
         MultusCNIManifestURL: !Ref MultusCNIManifestURL
         KubernetesVersion: !Ref KubernetesVersion
         EKSAdvancedConfigurationName: !Ref EKSAdvancedConfigurationName
+        XrdS3BucketName: !Ref XrdS3BucketName
+        XrdS3KeyPrefix: !Ref XrdS3KeyPrefix
+        XrdS3BucketRegion: !Ref XrdS3BucketRegion
 
 
 Outputs:
