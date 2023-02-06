@@ -376,7 +376,7 @@ Resources:
               }
             ]
           }
-        - OIDCProviderArn: !GetAttr OIDCProvider.Arn
+        - OIDCProviderArn: !GetAtt OIDCProvider.Arn
           OIDCProviderEndpoint: !Join
             - ""
             - !Split ["https://", !GetAtt EKSStack.Outputs.OIDCIssuerURL]
