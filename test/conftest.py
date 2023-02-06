@@ -95,10 +95,13 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     if "image" in metafunc.fixturenames:
         images = []
         ids = []
-        marks = [m.name for m in metafunc.definition.iter_markers()]
-        if "platform" in marks:
-            pass
+
+        if mark := metafunc.definition.get_closest_marker("platform"):
+            platforms = mark.args
         else:
+            platforms = (Platform.XRD_CONTROL_PLANE, Platform.XRD_VROUTER)
+
+        if Platform.XRD_CONTROL_PLANE in platforms:
             for tag in metafunc.config.option.control_plane_tags:
                 images.append(
                     Image(
@@ -109,6 +112,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                 )
                 ids.append(f"{Platform.XRD_CONTROL_PLANE}:{tag}")
 
+        if Platform.XRD_VROUTER in platforms:
             for tag in metafunc.config.option.vrouter_tags:
                 images.append(
                     Image(
