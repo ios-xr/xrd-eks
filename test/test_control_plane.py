@@ -5,78 +5,146 @@
 import textwrap
 from typing import Callable
 
-import kubernetes.client
 import pytest
-
-import _common
-import helm
-
-
-pytestmark = pytest.mark.control_plane
+import utils
+from _types import Image, Kubectl
+from helm import Helm
 
 
-def _get_pod(k8s: kubernetes.client.CoreV1Api) -> kubernetes.client.V1Pod:
-    """Returns the single XRd pod defined by the Helm chart."""
-    pods = _common.get_running_xrd_pods(k8s, num_expected=1)
-    return pods[0]
+def ping(image: Image, address: str) -> Callable[[], bool]:
+    def predicate() -> bool:
+        p = kubectl(
+            "exec",
+            f"xrd-{image.platform}-0",
+            "--",
+            "/pkg/bin/xrenv",
+            "ping",
+            address,
+        )
+        return "!!!!!" in p.stdout
+
+    return predicate
 
 
-@pytest.fixture
-def release(
-    ensure_xrd_helm_repo_added,
-    make_release: Callable[[str, dict, int], helm.Helm],
-    repository: str,
-    tag: str,
-) -> helm.Helm:
-    """Helm chart installed and uninstalled in each test case.
-
-    This is parametrized by ``--control-plane-repository`` and
-    ``--control-plane-tags``.
-
-    """
-    return make_release(
-        "xrd/xrd-control-plane",
-        values={
-            "image": {
-                "repository": repository,
-                "tag": tag,
-            },
-        },
-        num_expected_xrd_pods=1,
-    )
+@pytest.fixture(autouse=True)
+def teardown_topology(helm: Helm) -> None:
+    for release in helm.list():
+        helm.uninstall(release, wait=True)
+    yield
+    for release in helm.list():
+        helm.uninstall(release, wait=True)
 
 
-def test_chart(k8s: kubernetes.client.CoreV1Api, release: helm.Helm) -> None:
-    """Install, upgrade, and uninstall the Helm chart."""
-    # The chart is installed as part of setup.  Check that it is brought up
-    # successfully.
-    xrd = _get_pod(k8s)
-    _common.assert_no_process_aborts(k8s, xrd)
+class TestQuickStart:
+    pass
 
-    # Upgrade.  Add an interface and some configuration.
-    release.upgrade(
-        values={
-            "config": {
-                "ascii": textwrap.dedent(
-                    """
-                    hostname xrd
-                    interface GigabitEthernet0/0/0/0
-                     ipv4 address 100.0.1.11 255.255.255.0
-                    !
 
-                    """
-                ),
-            },
-            "interfaces": [
-                {
-                    "type": "defaultCni",
-                    "xrName": "Gi0/0/0/0",
+class TestBasic:
+    def test_install(self, image: Image, kubectl: Kubectl, helm: Helm) -> None:
+        release = helm.install(
+            f"xrd/{image.platform}",
+            name="xrd",
+            values={
+                "image": {
+                    "repository": image.repository,
+                    "tag": image.tag,
                 },
-            ],
-        },
-    )
+            },
+            wait=True,
+        )
 
-    _common.assert_pod_terminated(k8s, xrd)
-    xrd = _get_pod(k8s)
-    _common.assert_ping_success(k8s, xrd, "100.0.1.11")
-    _common.assert_no_process_aborts(k8s, xrd)
+    def test_upgrade(self, image: Image, kubectl: Kubectl, helm: Helm) -> None:
+        pass
+
+    def test_persistence(
+        self,
+        image: Image,
+        kubectl: Kubectl,
+        helm: Helm,
+    ) -> None:
+        release = helm.install(
+            f"xrd/{image.platform}",
+            name="xrd",
+            values={
+                "image": {
+                    "repository": image.repository,
+                    "tag": image.tag,
+                },
+                "persistence": {
+                    "enabled": True,
+                },
+            },
+            wait=True,
+        )
+        kubectl(
+            "exec",
+            f"xrd-{image.platform}-0",
+            "--",
+            "/bin/bash",
+            "-c",
+            "echo hi > /xr-storage/out.txt",
+        )
+
+        kubectl("delete", f"pod/xrd-{image.platform}-0", "--wait")
+        kubectl("wait", "--for=condition=Ready", f"pod/xrd-{image.platform}-0")
+        p = kubectl(
+            "exec",
+            f"xrd-{image.platform}-0",
+            "--",
+            "/bin/bash",
+            "-c",
+            "cat /xr-storage/out.txt",
+        )
+        assert "hi" in p.stdout
+
+
+class TestInterfaces:
+    def test_default_cni(
+        self, image: Image, kubectl: Kubectl, helm: Helm
+    ) -> None:
+        address = "100.0.1.11"
+        release = helm.install(
+            f"xrd/{image.platform}",
+            name="xrd",
+            values={
+                "image": {
+                    "repository": image.repository,
+                    "tag": image.tag,
+                },
+                "config": {
+                    "ascii": textwrap.dedent(
+                        f"""
+                        hostname xrd
+                        interface GigabitEthernet0/0/0/0
+                         ipv4 address {address} 255.255.255.0
+                        !
+
+                        """
+                    ).strip(),
+                },
+                "interfaces": [
+                    {
+                        "type": "defaultCni",
+                        "xrName": "Gi0/0/0/0",
+                    },
+                ],
+            },
+            wait=True,
+        )
+
+        if not utils.wait_until(
+            lambda: "!!!!!"
+            in kubectl(
+                "exec",
+                f"xrd-{image.platform}-0",
+                "--",
+                "/pkg/bin/xrenv",
+                "ping",
+                address,
+                check=False,
+                log_output=True,
+            ).stdout,
+            interval=5,
+            maximum=60,
+        ):
+            assert False, f"Could not ping {address}"

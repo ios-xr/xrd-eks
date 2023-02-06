@@ -3,24 +3,21 @@
 """Pytest hooks and fixtures."""
 
 import subprocess
-import sys
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
-import kubernetes.client
-import kubernetes.config
 import pytest
 import taskcat
+import utils
+from _types import Image, Kubectl, Platform
+from helm import Helm
 from taskcat.testing import CFNTest
-
-import _common
-import helm
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
         "--region",
-        required=True,
+        default="us-east-1",
         help="AWS region in which to run the tests [required]",
     )
     parser.addoption(
@@ -28,20 +25,18 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
     parser.addoption(
         "--control-plane-tags",
-        default=["latest"],
         nargs="+",
-        help="Space-separated list of xrd-control-plane image tags [default: "
-        "latest]",
+        default=[],
+        help="Space-separated list of xrd-control-plane image tags",
     )
     parser.addoption(
         "--vrouter-repository", help="xrd-vrouter image repository"
     )
     parser.addoption(
         "--vrouter-tags",
-        default=["latest"],
         nargs="+",
-        help="Space-separated list of xrd-vrouter image tags [default: "
-        "latest]",
+        default=[],
+        help="Space-separated list of xrd-vrouter image tags",
     )
     parser.addoption(
         "--taskcat-test-name",
@@ -93,15 +88,39 @@ def pytest_collection_modifyitems(
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
-    # Generate the parametrized `tag` fixture.
-    if "tag" in metafunc.fixturenames:
+    # Generate the parametrized `image` fixture.
+    if "image" in metafunc.fixturenames:
+        images = []
+        ids = []
         marks = [m.name for m in metafunc.definition.iter_markers()]
-        if "control_plane" in marks:
-            metafunc.parametrize(
-                "tag", metafunc.config.option.control_plane_tags
-            )
-        if "vrouter" in marks:
-            metafunc.parametrize("tag", metafunc.config.option.vrouter_tags)
+        if "platform" in marks:
+            pass
+        else:
+            for tag in metafunc.config.option.control_plane_tags:
+                images.append(
+                    Image(
+                        Platform.XRD_CONTROL_PLANE,
+                        metafunc.config.option.control_plane_repository,
+                        tag,
+                    ),
+                )
+                ids.append(f"{Platform.XRD_CONTROL_PLANE}:{tag}")
+
+            for tag in metafunc.config.option.vrouter_tags:
+                images.append(
+                    Image(
+                        Platform.XRD_VROUTER,
+                        metafunc.config.option.vrouter_repository,
+                        tag,
+                    ),
+                )
+                ids.append(f"{Platform.XRD_VROUTER}:{tag}")
+
+        metafunc.parametrize(
+            "image",
+            argvalues=images,
+            ids=ids,
+        )
 
 
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)
@@ -127,37 +146,6 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
         setattr(item, "result", result)
 
 
-@pytest.fixture
-def repository(request: pytest.FixtureRequest) -> str:
-    """Returns the (platform-dependent) image repository."""
-    marks = [m.name for m in request.node.iter_markers()]
-
-    assert (
-        "control_plane" in marks or "vrouter" in marks,
-        "Nodes using the `repository` fixture must be marked `control_plane` "
-        "or `vrouter`",
-    )
-
-    assert (
-        not ("control_plane" in marks and "vrouter" in marks),
-        "Nodes using the `repository` fixture must not be marked both "
-        "`control_plane` and `vrouter`",
-    )
-
-    if "control_plane" in marks:
-        repository = request.config.option.control_plane_repository
-
-    if "vrouter" in marks:
-        repository = request.config.option.vrouter_repository
-
-    # If the test case using this fixture is not skipped, then
-    # `--control-plane-repository` or `--vrouter-repository` as appropriate
-    # must have been provided.
-    assert repository is not None
-
-    return repository
-
-
 @pytest.fixture(scope="session")
 def taskcat_config(request: pytest.FixtureRequest) -> taskcat.Config:
     """Returns taskcat configuration."""
@@ -169,11 +157,10 @@ def taskcat_config(request: pytest.FixtureRequest) -> taskcat.Config:
 
 
 @pytest.fixture(scope="session")
-def k8s(
+def stack(
     request: pytest.FixtureRequest,
     taskcat_config: taskcat.Config,
-) -> kubernetes.client.CoreV1Api:
-    """Returns a Kubernetes client representing the EKS cluster."""
+) -> None:
     # Run the taskcat test to provision the AWS resources.
     test: Optional[CFNTest] = None
     if not request.config.option.skip_bringup:
@@ -189,7 +176,7 @@ def k8s(
 
     try:
         # Ensure the Kubernetes config is updated.
-        subprocess.run(
+        utils.run_cmd(
             [
                 "aws",
                 "eks",
@@ -199,13 +186,9 @@ def k8s(
                 "--name",
                 taskcat_config.config.general.parameters["ClusterName"],
             ],
-            check=True,
-            capture_output=True,
         )
 
-        kubernetes.config.load_kube_config()
-
-        yield kubernetes.client.CoreV1Api()
+        yield
 
     finally:
         if test is not None and not request.config.option.skip_teardown:
@@ -213,104 +196,18 @@ def k8s(
 
 
 @pytest.fixture(scope="session")
-def ensure_xrd_helm_repo_added() -> None:
-    """Adds the XRd Helm repository."""
-    subprocess.run(
-        [
-            "helm",
-            "repo",
-            "add",
-            "--force-update",
-            "xrd",
-            "https://ios-xr.github.io/xrd-helm",
-        ],
-        check=True,
-        capture_output=True,
+def kubectl(stack: None) -> Kubectl:
+    def run_kubectl(*args, **kwargs) -> subprocess.CompletedProcess[str]:
+        return utils.run_cmd(["kubectl", *args], **kwargs)
+
+    return run_kubectl
+
+
+@pytest.fixture(scope="session")
+def helm(stack: None) -> Helm:
+    """"""
+    helm = Helm()
+    helm.repo_add(
+        "xrd", "https://ios-xr.github.io/xrd-helm", force_update=True
     )
-
-
-@pytest.fixture
-def make_release(
-    request: pytest.FixtureRequest,
-    k8s: kubernetes.client.CoreV1Api,
-) -> Callable[[str, dict, int], helm.Helm]:
-    """Factory fixture to release a Helm chart.
-
-    The Helm chart is installed as part of setup, and uninstalled as part of
-    teardown.
-
-    Note also that any existing Helm release in the default namespace is
-    uninstalled as part of setup.
-
-    The factory must only be used once per test case.
-
-    """
-    release: Optional[helm.Helm] = None
-    xrd_pods: Optional[list[kubernetes.client.V1Pod]] = None
-
-    def _make_release(
-        chart_name: str, *, values: dict, num_expected_xrd_pods: int
-    ) -> helm.Helm:
-        # Assert this function is only called once per test case.
-        nonlocal release, xrd_pods
-        assert release is None and xrd_pods is None
-
-        # Ensure any currently present Helm releases in the default namespace
-        # are uninstalled.
-        for existing_release in helm.list():
-            existing_release.uninstall()
-
-        # Install the chart.
-        release = helm.install(chart_name, values=values)
-        assert release.status == "deployed"
-
-        # Wait for all expected XRd containers to start before yielding.
-        xrd_pods = _common.get_running_xrd_pods(
-            k8s, num_expected=num_expected_xrd_pods
-        )
-
-        return release
-
-    yield _make_release
-
-    if release is not None and xrd_pods is not None:
-        xrd_pods = _common.get_running_xrd_pods(k8s)
-
-        # Run some diagnostics if the test case failed.
-        result = getattr(request.node, "result", None)
-        if result is not None and result.failed:
-            for xrd_pod in xrd_pods:
-                print(
-                    _common.container_exec(
-                        k8s,
-                        xrd_pod,
-                        ["/pkg/bin/xrenv", "show_logging"],
-                    ),
-                    file=sys.stderr,
-                )
-                print(
-                    _common.container_exec(
-                        k8s,
-                        xrd_pod,
-                        ["/pkg/bin/xrenv", "show_ip_interface", "-b"],
-                    ),
-                    file=sys.stderr,
-                )
-                print(
-                    k8s.read_namespaced_pod(
-                        name=xrd_pod.metadata.name, namespace="default"
-                    ),
-                    file=sys.stderr,
-                )
-                print(
-                    k8s.read_namespaced_pod_log(
-                        name=xrd_pod.metadata.name, namespace="default"
-                    ),
-                    file=sys.stderr,
-                )
-
-        release.uninstall()
-
-        # Wait for all running XRd containers to terminate before returning.
-        for xrd_pod in xrd_pods:
-            _common.assert_pod_terminated(k8s, xrd_pod)
+    return helm

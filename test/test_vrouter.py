@@ -5,12 +5,10 @@
 import textwrap
 from typing import Callable
 
-import kubernetes.client
-import pytest
-
 import _common
 import helm
-
+import kubernetes.client
+import pytest
 
 pytestmark = pytest.mark.vrouter
 

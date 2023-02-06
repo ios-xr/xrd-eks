@@ -1,6 +1,5 @@
 awscli
 boto3
-file:helm
 kubernetes
 pytest
 taskcat
