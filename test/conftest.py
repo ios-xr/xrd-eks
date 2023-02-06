@@ -9,9 +9,9 @@ import warnings
 
 import pytest
 
-import utils
-from _types import Image, Kubectl, Platform
-from helm import Helm
+from . import utils
+from ._types import Image, Kubectl, Platform
+from .helm import Helm
 
 import taskcat
 from taskcat.testing import CFNTest

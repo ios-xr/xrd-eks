@@ -8,9 +8,9 @@ from typing import Callable
 
 import pytest
 
-import utils
-from _types import Image, Kubectl, Platform
-from helm import Helm
+from . import utils
+from ._types import Image, Kubectl, Platform
+from .helm import Helm
 
 
 @pytest.fixture(autouse=True)
