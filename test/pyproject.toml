@@ -15,7 +15,6 @@ lines_after_imports = 2
 
 [tool.pytest.ini_options]
 markers = [
+    "platform",
     "quickstart",
-    "control_plane",
-    "vrouter",
 ]
