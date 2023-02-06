@@ -92,11 +92,15 @@ def run_cmd(
 
 
 def wait_until(
-    predicate: Callable[[], bool], *, interval: int, maximum: int
+    interval: int,
+    maximum: int,
+    predicate: Callable[..., bool],
+    *args,
+    **kwargs,
 ) -> bool:
     elapsed = 0
     while elapsed < maximum:
-        if predicate():
+        if predicate(*args, **kwargs):
             return True
         time.sleep(interval)
         elapsed += interval
