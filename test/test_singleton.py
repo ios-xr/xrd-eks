@@ -85,6 +85,7 @@ def test_upgrade(image: Image, kubectl: Kubectl, helm: Helm) -> None:
         wait=True,
     )
 
+    # Upgrade the chart to configure a new hostname.
     helm.upgrade(
         release,
         reuse_values=True,
@@ -96,6 +97,8 @@ def test_upgrade(image: Image, kubectl: Kubectl, helm: Helm) -> None:
         wait=True,
     )
 
+    # Check the hostname is correct in the new instance - it may take a while
+    # for the new config to get applied, so use a predicate.
     def check_hostname(expected_hostname: str) -> bool:
         try:
             p = kubectl(
@@ -124,6 +127,11 @@ def test_persistence(
     kubectl: Kubectl,
     helm: Helm,
 ) -> None:
+    """
+    Check it is possible to write to a persistent volume used by the XRd Pod,
+    and that the data written persists over Pod restart.
+
+    """
     release = helm.install(
         f"xrd/{image.platform}",
         name="xrd",
@@ -164,6 +172,10 @@ def test_persistence(
 
 @pytest.mark.platform(Platform.XRD_CONTROL_PLANE)
 def test_default_cni(image: Image, kubectl: Kubectl, helm: Helm) -> None:
+    """
+    Check configuration of an XR interface backed by the default CNI interface.
+
+    """
     address = "100.0.1.11"
     release = helm.install(
         f"xrd/{image.platform}",
@@ -202,6 +214,11 @@ def test_default_cni(image: Image, kubectl: Kubectl, helm: Helm) -> None:
 
 @pytest.mark.platform(Platform.XRD_VROUTER)
 def test_pci_last(image: Image, kubectl: Kubectl, helm: Helm):
+    """
+    Check configuration of XR interfaces backed by PCI interfaces using the
+    ``last: n`` Helm chart value.
+
+    """
     address = "100.0.1.11"
     release = helm.install(
         f"xrd/{image.platform}",

@@ -54,6 +54,9 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         action="store_true",
         help="Do not teardown the AWS resources",
     )
+    parser.addoption(
+        "--kubernetes-version",
+    )
 
 
 def pytest_collection_modifyitems(
@@ -176,6 +179,11 @@ def stack(
             skip_upload=True,
             dont_wait_for_delete=False,
         )
+        # Set any Parameters given as pytest arguments.
+        if version := request.config.option.kubernetes_version:
+            test.config.config.tests[
+                request.config.option.taskcat_test_name
+            ].parameters["KubernetesVersion"] = str(version)
 
         test.run()
 
