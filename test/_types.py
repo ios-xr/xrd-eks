@@ -1,5 +1,5 @@
-import enum
 import dataclasses
+import enum
 import subprocess
 from typing import Callable
 
@@ -15,5 +15,5 @@ class Image:
     repository: str
     tag: str
 
-Kubectl = Callable[..., subprocess.CompletedProcess[str]]
 
+Kubectl = Callable[..., subprocess.CompletedProcess[str]]

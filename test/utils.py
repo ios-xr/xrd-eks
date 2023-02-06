@@ -1,24 +1,12 @@
-__all__ = (
-    "run_cmd",
-)
+__all__ = ("run_cmd",)
 
 
-import time
-import contextlib
-import enum
 import logging
-import math
-import pathlib
-import re
 import shlex
 import subprocess
-import tempfile
 import time
-import typing
-from types import MappingProxyType
-from typing import Iterable, List, Mapping, Optional, Union, Callable
+from typing import Callable, List
 
-import pytest
 
 
 logger = logging.getLogger(__name__)
@@ -104,7 +92,9 @@ def run_cmd(
     return p
 
 
-def wait_until(predicate: Callable[[], bool], *, interval: int, maximum: int) -> bool:
+def wait_until(
+    predicate: Callable[[], bool], *, interval: int, maximum: int
+) -> bool:
     elapsed = 0
     while elapsed < maximum:
         if predicate():

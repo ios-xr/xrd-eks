@@ -2,10 +2,12 @@
 
 """End-to-end tests for the 'xrd-control-plane' singleton chart in AWS."""
 
+import datetime
 import textwrap
 from typing import Callable
 
 import pytest
+
 import utils
 from _types import Image, Kubectl
 from helm import Helm
@@ -54,7 +56,43 @@ class TestBasic:
         )
 
     def test_upgrade(self, image: Image, kubectl: Kubectl, helm: Helm) -> None:
-        pass
+        release = helm.install(
+            f"xrd/{image.platform}",
+            name="xrd",
+            values={
+                "image": {
+                    "repository": image.repository,
+                    "tag": image.tag,
+                },
+            },
+            wait=True,
+        )
+
+        helm.upgrade(
+            release,
+            reuse_values=True,
+            values={
+                "config": {
+                    "ascii": "hostname foo",
+                },
+            },
+            wait=True,
+        )
+
+        if not utils.wait_until(
+            lambda: "foo"
+            in kubectl(
+                "exec",
+                f"xrd-{image.platform}-0",
+                "--",
+                "/bin/hostname",
+                check=False,
+                log_output=True,
+            ).stdout,
+            interval=5,
+            maximum=30,
+        ):
+            assert False, f"Hostname not updated"
 
     def test_persistence(
         self,
@@ -76,13 +114,15 @@ class TestBasic:
             },
             wait=True,
         )
+
+        now = str(datetime.datetime.now())
         kubectl(
             "exec",
             f"xrd-{image.platform}-0",
             "--",
             "/bin/bash",
             "-c",
-            "echo hi > /xr-storage/out.txt",
+            f"echo {now} > /xr-storage/out.txt",
         )
 
         kubectl("delete", f"pod/xrd-{image.platform}-0", "--wait")
@@ -95,7 +135,7 @@ class TestBasic:
             "-c",
             "cat /xr-storage/out.txt",
         )
-        assert "hi" in p.stdout
+        assert now in p.stdout
 
 
 class TestInterfaces:

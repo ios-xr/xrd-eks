@@ -174,7 +174,9 @@ class Helm:
             args.extend(
                 [
                     "--set-json",
-                    ",".join([f"{k}={json.dumps(v)}" for k, v in values.items()])
+                    ",".join(
+                        [f"{k}={json.dumps(v)}" for k, v in values.items()]
+                    ),
                 ]
             )
         elif values is not None:
@@ -191,6 +193,69 @@ class Helm:
         data = json.loads(p.stdout)
 
         return Release(data["name"], chart)
+
+    @subcommand(name="upgrade")
+    def upgrade(
+        self,
+        release: Release,
+        *,
+        dependency_update: bool = False,
+        devel: bool = False,
+        dry_run: bool = False,
+        reset_values: bool = False,
+        reuse_values: bool = False,
+        values: Union[str, list[str], dict[str, str], None] = None,
+        wait: bool = False,
+        **kwargs,
+    ) -> None:
+        """
+        Upgade a Helm release.
+
+        :param release:
+            Helm release.
+
+        :param values:
+            Either i. one or more paths to ``--values`` files; or ii. a
+            dictionary of values to set via ``--set``.
+
+        Other parameters are per ``helm upgrade``.
+
+        """
+        args = [release.name, release.chart]
+
+        if dependency_update:
+            args.append("--dependency-update")
+
+        if devel:
+            args.append("--devel")
+
+        if dry_run:
+            args.append("--dry-run")
+
+        if reset_values:
+            args.append("--reset-values")
+            
+        if reuse_values:
+            args.append("--reuse-values")
+            
+        if isinstance(values, dict):
+            args.extend(
+                [
+                    "--set-json",
+                    ",".join(
+                        [f"{k}={json.dumps(v)}" for k, v in values.items()]
+                    ),
+                ]
+            )
+        elif values is not None:
+            if not isinstance(values, list):
+                values = [values]
+            args.extend(["--values", *values])
+
+        if wait:
+            args.append("--wait")
+
+        return args
 
     @subcommand(name="uninstall")
     def uninstall(
