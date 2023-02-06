@@ -3,59 +3,66 @@
 """Pytest hooks and fixtures."""
 
 import subprocess
+import warnings
 from pathlib import Path
 from typing import Optional
 
 import pytest
-import taskcat
-from taskcat.testing import CFNTest
 
 from . import utils
-from ._types import Image, Kubectl, Platform
+from ._types import Image, Kubectl, KubernetesVersion, Platform
 from .helm import Helm
 
 
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", category=DeprecationWarning)
+    import taskcat
+    from taskcat.testing import CFNTest
+
+
 def pytest_addoption(parser: pytest.Parser) -> None:
-    parser.addoption(
-        "--region",
-        default="us-east-1",
-        help="AWS region in which to run the tests [required]",
+    group = parser.getgroup("aws_and_eks", "AWS and EKS")
+    group.addoption(
+        "--aws-region",
+        required=True,
+        help="AWS region in which to run the tests (required)",
     )
-    parser.addoption(
-        "--control-plane-repository", help="xrd-control-plane image repository"
+    group.addoption(
+        "--aws-skip-bringup",
+        action="store_true",
+        help="Do not bringup the AWS resources",
     )
-    parser.addoption(
-        "--control-plane-tags",
+    group.addoption(
+        "--aws-skip-teardown",
+        action="store_true",
+        help="Do not teardown the AWS resources",
+    )
+    group.addoption(
+        "--eks-kubernetes-version",
+        type=KubernetesVersion,
+        choices=list(KubernetesVersion),
+        help="Kubernetes control plane version",
+    )
+
+    group = parser.getgroup("xrd", "XRd")
+    group.addoption(
+        "--xrd-control-plane-repository",
+        help="xrd-control-plane image repository",
+    )
+    group.addoption(
+        "--xrd-control-plane-tags",
         nargs="+",
         default=[],
         help="Space-separated list of xrd-control-plane image tags",
     )
-    parser.addoption(
-        "--vrouter-repository", help="xrd-vrouter image repository"
+    group.addoption(
+        "--xrd-vrouter-repository", help="xrd-vrouter image repository"
     )
-    parser.addoption(
-        "--vrouter-tags",
+    group.addoption(
+        "--xrd-vrouter-tags",
         nargs="+",
         default=[],
         help="Space-separated list of xrd-vrouter image tags",
-    )
-    parser.addoption(
-        "--taskcat-test-name",
-        default="xrd-example-overlay",
-        help="Taskcat test to run to provision the required AWS resources",
-    )
-    parser.addoption(
-        "--skip-bringup",
-        action="store_true",
-        help="Do not bringup the AWS resources",
-    )
-    parser.addoption(
-        "--skip-teardown",
-        action="store_true",
-        help="Do not teardown the AWS resources",
-    )
-    parser.addoption(
-        "--kubernetes-version",
     )
 
 
@@ -64,22 +71,29 @@ def pytest_collection_modifyitems(
 ) -> None:
     new_items = []
     for item in items:
-        marks = [m.name for m in item.iter_markers()]
+        if mark := item.get_closest_marker("platform"):
+            platforms = mark.args
+        else:
+            platforms = (Platform.XRD_CONTROL_PLANE, Platform.XRD_VROUTER)
 
-        # Skip any tests marked 'control_plane' or 'vrouter' if the relevant
-        # repository is not specified.
         if (
-            "control_plane" in marks
-            and config.option.control_plane_repository is None
+            Platform.XRD_CONTROL_PLANE in platforms
+            and config.option.xrd_control_plane_repository is None
         ):
             item.add_marker(
                 pytest.mark.skip(
-                    reason="'--control-plane-repository' not provided"
+                    reason="'--xrd-control-plane-repository' not provided"
                 )
             )
-        if "vrouter" in marks and config.option.vrouter_repository is None:
+
+        if (
+            Platform.XRD_VROUTER in platforms
+            and config.option.xrd_vrouter_repository is None
+        ):
             item.add_marker(
-                pytest.mark.skip(reason="'--vrouter-repository' not provided")
+                pytest.mark.skip(
+                    reason="'--xrd-vrouter-repository' not provided"
+                )
             )
 
         # Make sure any items marked 'quickstart' are run first.
@@ -102,19 +116,25 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         else:
             platforms = (Platform.XRD_CONTROL_PLANE, Platform.XRD_VROUTER)
 
-        if Platform.XRD_CONTROL_PLANE in platforms:
-            for tag in metafunc.config.option.control_plane_tags:
+        if (
+            Platform.XRD_CONTROL_PLANE in platforms
+            and metafunc.config.option.xrd_control_plane_repository
+        ):
+            for tag in metafunc.config.option.xrd_control_plane_tags:
                 images.append(
                     Image(
                         Platform.XRD_CONTROL_PLANE,
-                        metafunc.config.option.control_plane_repository,
+                        metafunc.config.option.xrd_control_plane_repository,
                         tag,
                     ),
                 )
                 ids.append(f"{Platform.XRD_CONTROL_PLANE}:{tag}")
 
-        if Platform.XRD_VROUTER in platforms:
-            for tag in metafunc.config.option.vrouter_tags:
+        if (
+            Platform.XRD_VROUTER in platforms
+            and metafunc.config.option.xrd_vrouter_repository
+        ):
+            for tag in metafunc.config.option.xrd_vrouter_tags:
                 images.append(
                     Image(
                         Platform.XRD_VROUTER,
@@ -174,16 +194,16 @@ def stack(
     if not request.config.option.skip_bringup:
         test = CFNTest(
             config=taskcat_config,
-            test_names=request.config.option.taskcat_test_name,
+            test_names="xrd-example-overlay",
             regions=request.config.option.region,
             skip_upload=True,
             dont_wait_for_delete=False,
         )
         # Set any Parameters given as pytest arguments.
         if version := request.config.option.kubernetes_version:
-            test.config.config.tests[
-                request.config.option.taskcat_test_name
-            ].parameters["KubernetesVersion"] = str(version)
+            test.config.config.tests["xrd-example-overlay"].parameters[
+                "KubernetesVersion"
+            ] = str(version)
 
         test.run()
 
