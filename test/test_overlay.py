@@ -2,16 +2,13 @@
 
 """End-to-end tests for the 'aws-overlay-example' Helm chart."""
 
-import textwrap
-from pathlib import Path
-from typing import Callable, Tuple
+from typing import Callable
 
-import kubernetes.client
 import pytest
 
+from . import utils
+from ._types import Image, Kubectl, Platform
 from .helm import Helm
-from ._types import Platform, Kubectl, Image
-from . import _common, utils
 
 
 pytestmark = pytest.mark.platform(Platform.XRD_VROUTER)
@@ -41,12 +38,13 @@ def test_quickstart(image: Image, kubectl: Kubectl, helm: Helm) -> None:
                 log_output=True,
             )
             return p.returncode == 0 and "!!!!!" in p.stdout
+
         return predicate
 
     for address in ("10.0.2.12", "10.0.3.12"):
         if not utils.wait_until(ping("xrd1", address), interval=5, maximum=60):
             assert False, f"Could not ping {address} from 'xrd1'"
-    
+
     for address in ("10.0.2.11", "10.0.3.11"):
         if not utils.wait_until(ping("xrd2", address), interval=5, maximum=60):
             assert False, f"Could not ping {address} from 'xrd2'"

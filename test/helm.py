@@ -234,10 +234,10 @@ class Helm:
 
         if reset_values:
             args.append("--reset-values")
-            
+
         if reuse_values:
             args.append("--reuse-values")
-            
+
         if isinstance(values, dict):
             args.extend(
                 [

@@ -4,7 +4,6 @@
 
 import datetime
 import textwrap
-from typing import Callable
 
 import pytest
 
@@ -62,7 +61,8 @@ class TestBasic:
 
         if not utils.wait_until(
             lambda: (
-                "foo" in kubectl(
+                "foo"
+                in kubectl(
                     "exec",
                     f"xrd-{image.platform}-0",
                     "--",
@@ -175,9 +175,7 @@ class TestInterfaces:
             assert False, f"Could not ping {address}"
 
     @pytest.mark.platform(Platform.XRD_VROUTER)
-    def test_pci_last(
-        self, image: Image, kubectl: Kubectl, helm: Helm
-    ):
+    def test_pci_last(self, image: Image, kubectl: Kubectl, helm: Helm):
         address = "100.0.1.11"
         release = helm.install(
             f"xrd/{image.platform}",
