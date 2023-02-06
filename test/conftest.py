@@ -72,29 +72,17 @@ def pytest_collection_modifyitems(
     new_items = []
     for item in items:
         if mark := item.get_closest_marker("platform"):
-            platforms = mark.args
-        else:
-            platforms = (Platform.XRD_CONTROL_PLANE, Platform.XRD_VROUTER)
-
-        if (
-            Platform.XRD_CONTROL_PLANE in platforms
-            and config.option.xrd_control_plane_repository is None
-        ):
-            item.add_marker(
-                pytest.mark.skip(
-                    reason="'--xrd-control-plane-repository' not provided"
+            if not (
+                Platform.XRD_CONTROL_PLANE in mark.args
+                and config.option.xrd_control_plane_repository is not None
+                or Platform.XRD_VROUTER in mark.args
+                and config.option.xrd_vrouter_repository is not None
+            ):
+                item.add_marker(
+                    pytest.mark.skip(
+                        reason="Repository not provided for this platform"
+                    )
                 )
-            )
-
-        if (
-            Platform.XRD_VROUTER in platforms
-            and config.option.xrd_vrouter_repository is None
-        ):
-            item.add_marker(
-                pytest.mark.skip(
-                    reason="'--xrd-vrouter-repository' not provided"
-                )
-            )
 
         # Make sure any items marked 'quickstart' are run first.
         if "quickstart" in marks:
@@ -238,7 +226,6 @@ def kubectl(stack: None) -> Kubectl:
 
 @pytest.fixture(scope="session")
 def helm(stack: None) -> Helm:
-    """"""
     helm = Helm()
     helm.repo_add(
         "xrd", "https://ios-xr.github.io/xrd-helm", force_update=True

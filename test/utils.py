@@ -1,4 +1,9 @@
-__all__ = ("run_cmd",)
+# utils.py
+
+__all__ = (
+    "run_cmd",
+    "wait_until",
+)
 
 
 import logging
@@ -12,25 +17,29 @@ logger = logging.getLogger(__name__)
 
 
 def run_cmd(
-    cmd: List[str], *, log_output: bool = False, **kwargs
+    cmd: list[str], *, log_output: bool = False, **kwargs
 ) -> subprocess.CompletedProcess[str]:
     """
     Run a command, capturing stdout and stderr by default, and raising on error.
 
     :param cmd:
         The command to run.
+
     :param log_output:
         Whether to log the output.
+
     :param kwargs:
         Passed through to subprocess.run().
 
-    :raise subprocess.CalledProcessError:
+    :raises subprocess.CalledProcessError:
         If the command returns non-zero exit status.
-    :raise subprocess.TimeoutExpired:
+
+    :raises subprocess.TimeoutExpired:
         If timeout is given and the command times out.
 
     :return:
         Completed process object from subprocess.run().
+
     """
     logger.debug("Running command: %r", shlex.join(cmd))
     kwargs = {
