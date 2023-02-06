@@ -47,6 +47,12 @@ Parameters:
     Type: String
     Description: Root password for the XRd instance
 
+  KubernetesVersion:
+    Type: String
+    AllowedValues: [ "1.22", "1.23", "1.24" ]
+    Default: "1.22"
+    Description: Kubernetes control plane version.
+
   ### These parameters need to match values within XRd config in helm values -
   ###  not really expecting them to be changed.
   AccessASubnetTagValue:
@@ -139,7 +145,7 @@ Parameters:
   SkipHelmRelease:
     Type: String
     AllowedValues: [ "Yes", "No" ]
-    Default: "Yes"
+    Default: "No"
     Description: Specify Yes to avoid installing the helm chart and just create the underlying infrastructure
 
 
@@ -187,6 +193,8 @@ Resources:
         XrdS3KeyPrefix: !Ref XrdS3KeyPrefix
         XrdS3BucketRegion: !Ref XrdS3BucketRegion
 
+        KubernetesVersion: !Ref KubernetesVersion
+
   NodeB:
     Condition: NodeStackRequired
     UpdateReplacePolicy: Delete
@@ -216,6 +224,8 @@ Resources:
         XrdS3KeyPrefix: !Ref XrdS3KeyPrefix
         XrdS3BucketRegion: !Ref XrdS3BucketRegion
 
+        KubernetesVersion: !Ref KubernetesVersion
+
   NodeC:
     Condition: NodeStackRequired
     UpdateReplacePolicy: Delete
@@ -241,6 +251,8 @@ Resources:
         XrdS3BucketName: !Ref XrdS3BucketName
         XrdS3KeyPrefix: !Ref XrdS3KeyPrefix
         XrdS3BucketRegion: !Ref XrdS3BucketRegion
+
+        KubernetesVersion: !Ref KubernetesVersion
 
   Release:
     Condition: HelmReleaseRequired
