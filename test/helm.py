@@ -1,11 +1,4 @@
-# -----------------------------------------------------------------------------
-# helm.py - wrapper for Helm commands
-#
-# January 2023, Tom Johnes
-#
-# Copyright (c) 2023 by Cisco Systems, Inc.
-# All rights reserved.
-# -----------------------------------------------------------------------------
+# helm.py
 
 __all__ = (
     "Helm",
@@ -209,7 +202,7 @@ class Helm:
         **kwargs,
     ) -> None:
         """
-        Upgade a Helm release.
+        Upgrade a Helm release.
 
         :param release:
             Helm release.
