@@ -9,23 +9,8 @@ from typing import Callable
 import pytest
 
 import utils
-from _types import Image, Kubectl
+from _types import Image, Kubectl, Platform
 from helm import Helm
-
-
-def ping(image: Image, address: str) -> Callable[[], bool]:
-    def predicate() -> bool:
-        p = kubectl(
-            "exec",
-            f"xrd-{image.platform}-0",
-            "--",
-            "/pkg/bin/xrenv",
-            "ping",
-            address,
-        )
-        return "!!!!!" in p.stdout
-
-    return predicate
 
 
 @pytest.fixture(autouse=True)
@@ -35,10 +20,6 @@ def teardown_topology(helm: Helm) -> None:
     yield
     for release in helm.list():
         helm.uninstall(release, wait=True)
-
-
-class TestQuickStart:
-    pass
 
 
 class TestBasic:
@@ -80,15 +61,16 @@ class TestBasic:
         )
 
         if not utils.wait_until(
-            lambda: "foo"
-            in kubectl(
-                "exec",
-                f"xrd-{image.platform}-0",
-                "--",
-                "/bin/hostname",
-                check=False,
-                log_output=True,
-            ).stdout,
+            lambda: (
+                "foo" in kubectl(
+                    "exec",
+                    f"xrd-{image.platform}-0",
+                    "--",
+                    "/bin/hostname",
+                    check=False,
+                    log_output=True,
+                ).stdout,
+            ),
             interval=5,
             maximum=30,
         ):
@@ -139,6 +121,7 @@ class TestBasic:
 
 
 class TestInterfaces:
+    @pytest.mark.platform(Platform.XRD_CONTROL_PLANE)
     def test_default_cni(
         self, image: Image, kubectl: Kubectl, helm: Helm
     ) -> None:
@@ -155,7 +138,7 @@ class TestInterfaces:
                     "ascii": textwrap.dedent(
                         f"""
                         hostname xrd
-                        interface GigabitEthernet0/0/0/0
+                        interface Gi0/0/0/0
                          ipv4 address {address} 255.255.255.0
                         !
 
@@ -173,17 +156,74 @@ class TestInterfaces:
         )
 
         if not utils.wait_until(
-            lambda: "!!!!!"
-            in kubectl(
-                "exec",
-                f"xrd-{image.platform}-0",
-                "--",
-                "/pkg/bin/xrenv",
-                "ping",
-                address,
-                check=False,
-                log_output=True,
-            ).stdout,
+            lambda: (
+                "!!!!!"
+                in kubectl(
+                    "exec",
+                    f"xrd-{image.platform}-0",
+                    "--",
+                    "/pkg/bin/xrenv",
+                    "ping",
+                    address,
+                    check=False,
+                    log_output=True,
+                ).stdout,
+            ),
+            interval=5,
+            maximum=60,
+        ):
+            assert False, f"Could not ping {address}"
+
+    @pytest.mark.platform(Platform.XRD_VROUTER)
+    def test_pci_last(
+        self, image: Image, kubectl: Kubectl, helm: Helm
+    ):
+        address = "100.0.1.11"
+        release = helm.install(
+            f"xrd/{image.platform}",
+            name="xrd",
+            values={
+                "image": {
+                    "repository": image.repository,
+                    "tag": image.tag,
+                },
+                "config": {
+                    "ascii": textwrap.dedent(
+                        f"""
+                        hostname xrd
+                        interface Hu0/0/0/0
+                         ipv4 address {address} 255.255.255.0
+                        !
+
+                        """
+                    ).strip(),
+                },
+                "interfaces": [
+                    {
+                        "type": "pci",
+                        "config": {
+                            "last": 1,
+                        },
+                    },
+                ],
+            },
+            wait=True,
+        )
+
+        if not utils.wait_until(
+            lambda: (
+                "!!!!!"
+                in kubectl(
+                    "exec",
+                    f"xrd-{image.platform}-0",
+                    "--",
+                    "/pkg/bin/xrenv",
+                    "ping",
+                    address,
+                    check=False,
+                    log_output=True,
+                ).stdout,
+            ),
             interval=5,
             maximum=60,
         ):
