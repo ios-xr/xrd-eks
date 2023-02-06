@@ -1,8 +1,7 @@
 # test_overlay.py
 
-"""End-to-end tests for the 'aws-overlay-example' Helm chart."""
+"""End-to-end tests for the Overlay application."""
 
-from typing import Callable
 
 import pytest
 
@@ -12,6 +11,62 @@ from .helm import Helm
 
 
 pytestmark = pytest.mark.platform(Platform.XRD_VROUTER)
+
+
+def check_bgp_established(
+    kubectl: Kubectl,
+    pod_name: str,
+    neighbor: str,
+) -> bool:
+    """
+    Check whether a BGP session is established with the given neighbor.
+
+    :param kubectl:
+        Kubectl context.
+
+    :param pod_name:
+        Pod from which to check BGP connectivity.
+
+    :param neighbor:
+        IP address of the neighbor.
+
+    :return:
+        True if the connection is established.
+        False otherwise.
+
+    """
+    try:
+        p = kubectl(
+            "exec",
+            pod_name,
+            "--",
+            "xrenv",
+            "bgp_show",
+            "-V",
+            "default",
+            "-n",
+            "-br",
+            "-instance",
+            "default",
+        )
+    except subprocess.CalledProcessError:
+        return False
+
+    # Example output:
+    #
+    # Neighbor        Spk    AS Description                          Up/Down  NBRState
+    # 10.1.0.2          0     1                                      00:17:12 Established
+    # 100.0.0.1         0     1                                      00:15:44 Established
+    #
+    # Grab the fifth column of the correct neighbour.
+    for line in p.stdout.strip().splitlines():
+        cols = line.split()
+        if cols[0] == neighbor:
+            if cols[4] == "Established":
+                return True
+            break
+
+    return False
 
 
 @pytest.mark.quickstart
@@ -25,26 +80,46 @@ def test_quickstart(image: Image, kubectl: Kubectl, helm: Helm) -> None:
     release = releases[0]
     assert release.name == expected_release_name
 
-    def ping(hostname: str, address: str) -> Callable[[], bool]:
-        def predicate() -> bool:
-            p = kubectl(
-                "exec",
-                f"{expected_release_name}-{hostname}-0",
-                "--",
-                "/pkg/bin/xrenv",
-                "ping",
-                address,
-                check=False,
-                log_output=True,
-            )
-            return p.returncode == 0 and "!!!!!" in p.stdout
+    if not utils.wait_until(
+        5,
+        60,
+        check_bgp_established,
+        kubectl,
+        f"{expected_release_name}-xrd1-0",
+        "1.0.0.12",
+    ):
+        assert False, f"BGP not established"
 
-        return predicate
+    if not utils.wait_until(
+        5,
+        60,
+        check_bgp_established,
+        kubectl,
+        f"{expected_release_name}-xrd2-0",
+        "1.0.0.11",
+    ):
+        assert False, f"BGP not established"
 
     for address in ("10.0.2.12", "10.0.3.12"):
-        if not utils.wait_until(ping("xrd1", address), interval=5, maximum=60):
-            assert False, f"Could not ping {address} from 'xrd1'"
+        p = kubectl(
+            "exec",
+            f"{expected_release_name}-xrd1-0",
+            "--",
+            "xrenv",
+            "ping",
+            address,
+            log_output=True,
+        )
+        assert "!!!!!" in p.stdout
 
     for address in ("10.0.2.11", "10.0.3.11"):
-        if not utils.wait_until(ping("xrd2", address), interval=5, maximum=60):
-            assert False, f"Could not ping {address} from 'xrd2'"
+        p = kubectl(
+            "exec",
+            f"{expected_release_name}-xrd1-0",
+            "--",
+            "xrenv",
+            "ping",
+            address,
+            log_output=True,
+        )
+        assert "!!!!!" in p.stdout
