@@ -104,8 +104,8 @@ fi
 
 # Create a CloudFormation stack.
 # https://awscli.amazonaws.com/v2/documentation/api/latest/reference/cloudformation/create-stack.html
-APPLICATION=${APPLICATION:-"Singleton"}
-PLATFORM=${PLATFORM:-"ControlPlane"}
+APPLICATION=${APPLICATION:-"Overlay"}
+PLATFORM=${PLATFORM:-"VRouter"}
 STACK_NAME=${STACK_NAME:-xrd-${APPLICATION}}
 TEMPLATE_NAME=${TEMPLATE_NAME:-xrd-example-cf.yaml}
 
@@ -115,7 +115,6 @@ AWS_REGION=${AWS_REGION:-$(aws configure get region)}
 
 BUCKET_REGION=${BUCKET_REGION:-${AWS_REGION}}
 BUCKET_KEY_PREFIX=${BUCKET_KEY_PREFIX:-"xrd-eks/"}
-
 
 AVAILABILITY_ZONES=${AVAILABILITY_ZONES:-"$(aws ec2 describe-availability-zones --query AvailabilityZones[0:2].ZoneName --output text | sed -e 's/[[:space:]][[:space:]]*/,/g')"}
 
@@ -167,8 +166,6 @@ aws cloudformation create-stack --stack-name "${STACK_NAME}" \
                                 --disable-rollback \
                                 --capabilities ${CAPABILITIES} \
                                 --parameters ${PARAMETERS}
-
-exit
 
 # Stack creation can sometimes take > 1 hour which is the timeout interval -
 # so run twice if needed.
