@@ -72,7 +72,7 @@ def check_bgp_established(
 @pytest.mark.quickstart
 def test_quickstart(image: Image, kubectl: Kubectl, helm: Helm) -> None:
     """XRd QuickStart should install the example Overlay application."""
-    expected_release_name = "aws-overlay-example"
+    expected_release_name = "xrd-example"
 
     releases = helm.list()
 
