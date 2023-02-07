@@ -224,7 +224,7 @@ Parameters:
   SkipHelmRelease:
     Type: String
     AllowedValues: [ "Yes", "No" ]
-    Default: "Yes"
+    Default: "No"
     Description: Specify Yes to avoid installing the helm chart and just create the underlying infrastructure
 
   KubernetesVersion:
