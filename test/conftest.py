@@ -92,7 +92,9 @@ def pytest_collection_modifyitems(
         else:
             new_items.append(item)
 
-    import pdb;pdb.set_trace()
+    import pdb
+
+    pdb.set_trace()
     items[:] = new_items
 
 

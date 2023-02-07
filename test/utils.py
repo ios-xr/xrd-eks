@@ -10,7 +10,7 @@ import logging
 import shlex
 import subprocess
 import time
-from typing import Callable, List
+from typing import Callable
 
 
 logger = logging.getLogger(__name__)
