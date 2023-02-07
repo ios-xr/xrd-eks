@@ -47,22 +47,24 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     group = parser.getgroup("xrd", "XRd")
     group.addoption(
         "--xrd-control-plane-repository",
-        help="xrd-control-plane image repository",
+        help="XRd Control Plane image repository",
     )
     group.addoption(
         "--xrd-control-plane-tags",
         nargs="+",
-        default=[],
-        help="Space-separated list of xrd-control-plane image tags",
+        default=["latest"],
+        help="Space-separated list of XRd Control Plane image tags (default: "
+        "'latest')",
     )
     group.addoption(
-        "--xrd-vrouter-repository", help="xrd-vrouter image repository"
+        "--xrd-vrouter-repository", help="XRd vRouter image repository"
     )
     group.addoption(
         "--xrd-vrouter-tags",
         nargs="+",
-        default=[],
-        help="Space-separated list of xrd-vrouter image tags",
+        default=["latest"],
+        help="Space-separated list of XRd vRouter image tags (default: "
+        "'latest')",
     )
 
 
@@ -85,11 +87,12 @@ def pytest_collection_modifyitems(
                 )
 
         # Make sure any items marked 'quickstart' are run first.
-        if "quickstart" in marks:
+        if item.get_closest_marker("quickstart"):
             new_items.insert(0, item)
         else:
             new_items.append(item)
 
+    import pdb;pdb.set_trace()
     items[:] = new_items
 
 
