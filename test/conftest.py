@@ -128,7 +128,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                 images.append(
                     Image(
                         Platform.XRD_VROUTER,
-                        metafunc.config.option.vrouter_repository,
+                        metafunc.config.option.xrd_vrouter_repository,
                         tag,
                     ),
                 )
@@ -181,16 +181,16 @@ def stack(
 ) -> None:
     # Run the taskcat test to provision the AWS resources.
     test: Optional[CFNTest] = None
-    if not request.config.option.skip_bringup:
+    if not request.config.option.aws_skip_bringup:
         test = CFNTest(
             config=taskcat_config,
             test_names="xrd-example-overlay",
-            regions=request.config.option.region,
+            regions=request.config.option.aws_region,
             skip_upload=True,
             dont_wait_for_delete=False,
         )
         # Set any Parameters given as pytest arguments.
-        if version := request.config.option.kubernetes_version:
+        if version := request.config.option.eks_kubernetes_version:
             test.config.config.tests["xrd-example-overlay"].parameters[
                 "KubernetesVersion"
             ] = str(version)
@@ -205,7 +205,7 @@ def stack(
                 "eks",
                 "update-kubeconfig",
                 "--region",
-                request.config.option.region,
+                request.config.option.aws_region,
                 "--name",
                 taskcat_config.config.general.parameters["ClusterName"],
             ],
@@ -214,7 +214,7 @@ def stack(
         yield
 
     finally:
-        if test is not None and not request.config.option.skip_teardown:
+        if test is not None and not request.config.option.aws_skip_teardown:
             test.clean_up()
 
 
