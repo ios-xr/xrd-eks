@@ -26,6 +26,8 @@ pipeline {
                         --xrd-control-plane-tags ${params.xrd_control_plane_tags} \
                         --xrd-vrouter-repository ${params.xrd_vrouter_repository} \
                         --xrd-vrouter-tags ${params.xrd_vrouter_tags}          \
+                        --log-file all.log                                     \
+                        --log-file-level debug                                 \
                         --junitxml results.xml"
             }
         }
@@ -33,6 +35,8 @@ pipeline {
 
     post {
         always {
+            archiveArtifacts "test/all.log"
+            sh "rm -f test/all.log"
             junit "test/results.xml"
             sh "rm -f test/results.xml"
         }
