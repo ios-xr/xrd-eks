@@ -14,6 +14,9 @@ from ._types import Image, Kubectl, KubernetesVersion, Platform
 from .helm import Helm
 
 
+# `taskcat._amiupdater.AMIUpdater` passes an absolute path to
+# `pkg_resources.resource_filename`, which is deprecated.  Ignore this warning
+# when importing taskcat modules.
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", category=DeprecationWarning)
     import taskcat
@@ -74,15 +77,24 @@ def pytest_collection_modifyitems(
     new_items = []
     for item in items:
         if mark := item.get_closest_marker("platform"):
-            if not (
-                Platform.XRD_CONTROL_PLANE in mark.args
-                and config.option.xrd_control_plane_repository is not None
-                or Platform.XRD_VROUTER in mark.args
-                and config.option.xrd_vrouter_repository is not None
+            if (
+                mark.args[0] is Platform.XRD_CONTROL_PLANE
+                and config.option.xrd_control_plane_repository is None
             ):
                 item.add_marker(
                     pytest.mark.skip(
-                        reason="Repository not provided for this platform"
+                        "Test is marked for platform xrd-control-plane but "
+                        "`--xrd-control-plane-repository` was not provided"
+                    )
+                )
+            elif (
+                mark.args[0] is Platform.XRD_VROUTER
+                and config.option.xrd_vrouter_repository is None
+            ):
+                item.add_marker(
+                    pytest.mark.skip(
+                        "Test is marked for platform xrd-vrouter but "
+                        "`--xrd-vrouter-repository` was not provided"
                     )
                 )
 
@@ -96,7 +108,19 @@ def pytest_collection_modifyitems(
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
-    # Generate the parametrized `image` fixture.
+    """
+    Generate parametrized calls to a test function.
+
+    This is used to generate the dynamically parametrized ``image`` fixture.
+    This fixture should yield a `_types.Image` for each tag specified in
+    ``--xrd-control-plane-tags`` and ``--xrd-vrouter-tags`` respectively.  If
+    the test is marked for a specific platform, then yield images for that
+    particular platform only as appropriate.
+
+    See https://docs.pytest.org/en/latest/how-to/parametrize.html#pytest-generate-tests
+    for more details on this approach to parametrized fixtures.
+
+    """
     if "image" in metafunc.fixturenames:
         images = []
         ids = []
@@ -134,34 +158,12 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                 )
                 ids.append(f"{Platform.XRD_VROUTER}:{tag}")
 
-        metafunc.parametrize(
-            "image",
-            argvalues=images,
-            ids=ids,
-        )
-
-
-@pytest.hookimpl(hookwrapper=True, tryfirst=True)
-def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
-    """
-    Set the ``result`` attribute on a test item after it has completed the
-    call phase.
-
-    This may be used to implement run-on-failure actions in the test teardown
-    phase.  For example:
-
-    >>> @pytest.fixture
-    ... def teardown(request):
-    ...     yield
-    ...     result = getattr(request.node, "result", None)
-    ...     if result is not None and result.failed:
-    ...         # Commands to run-on-failure.
-
-    """
-    outcome = yield
-    result = outcome.get_result()
-    if result.when == "call":
-        setattr(item, "result", result)
+        if images:
+            metafunc.parametrize(
+                "image",
+                argvalues=images,
+                ids=ids,
+            )
 
 
 @pytest.fixture(scope="session")
@@ -179,6 +181,7 @@ def stack(
     request: pytest.FixtureRequest,
     taskcat_config: taskcat.Config,
 ) -> None:
+    """Bringup and teardown the XRd Overlay stack."""
     # Run the taskcat test to provision the AWS resources.
     test: Optional[CFNTest] = None
     if not request.config.option.aws_skip_bringup:
@@ -220,7 +223,26 @@ def stack(
 
 @pytest.fixture(scope="session")
 def kubectl(stack: None) -> Kubectl:
+    """
+    Fixture which provides a function to run a ``kubectl`` command, within the
+    context of the XRd cluster.
+
+    """
+
     def run_kubectl(*args, **kwargs) -> subprocess.CompletedProcess[str]:
+        """
+        Run a ``kubectl`` command.
+
+        :param args:
+            Arguments to pass to ``kubectl``.
+
+        :param kwargs:
+            Keyword arguments to pass to `utils.run_cmd`.
+
+        :returns subprocess.CompletedProcess[str]:
+            The completed ``kubectl`` process.
+
+        """
         return utils.run_cmd(["kubectl", *args], **kwargs)
 
     return run_kubectl
@@ -228,6 +250,11 @@ def kubectl(stack: None) -> Kubectl:
 
 @pytest.fixture(scope="session")
 def helm(stack: None) -> Helm:
+    """
+    Fixture which provides an instance of the `Helm` wrapper, within the
+    context of the XRd cluster.
+
+    """
     helm = Helm()
     helm.repo_add(
         "xrd", "https://ios-xr.github.io/xrd-helm", force_update=True
