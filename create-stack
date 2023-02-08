@@ -4,11 +4,45 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-show_help() {
-    >&2 echo "Usage: create-stack -u XR_USERNAME -p XR_PASSWORD -k EC2_KEY_PAIR [-a CUSTOM_AMI_ID]"
-    >&2 echo ""
-    >&2 echo "Create an example XRd CF stack"
+usage()  {
+    >&2 cat << EOF
+USAGE:
+    create-stack [OPTIONS] -u XR_USERNAME -p XR_PASSWORD -k EC2_KEY_PAIR
+
+EOF
 }
+
+long_usage() {
+    >&2 cat << EOF
+Create an example XRd CF stack.
+
+EOF
+    usage
+    >&2 cat << EOF
+ARGS:
+    -u, --username
+           XR username.
+
+    -p, --password
+           XR password.
+
+    -k, --key-pair
+           Name of an existing EC2 key pair to associate with the EKS worker
+           nodes.
+
+OPTIONS:
+    -a, --custom-ami
+            AMI ID of an image used to launch the EKS worker nodes (default: use
+            the Amazon EKS optimized Amazon Linux AMI).
+
+    --kubernetes-version
+            Kubernetes version to use.  This must be one of: 1.22, 1.23, 1.24
+            (default: 1.22).
+EOF
+}
+
+# Default arguments.
+KUBERNETES_VERSION="1.22"
 
 # Parse the arguments
 while [ $# -gt 0 ]; do
@@ -29,8 +63,12 @@ while [ $# -gt 0 ]; do
       CUSTOM_AMI_ID="$2"
       shift
       ;;
+    --kubernetes-version )
+      KUBERNETES_VERSION="$2"
+      shift
+      ;;
     -h|--help )
-      show_help
+      long_usage
       exit 255
       ;;
   esac
@@ -38,23 +76,30 @@ while [ $# -gt 0 ]; do
 done
 
 ERROR=""
-if [ -z "${XR_USERNAME}" ]; then
-  >&2 echo "XR username (-u|--username) must be specified"
+if [ -z "${XR_USERNAME:-}" ]; then
+  >&2 echo "error: XR username (-u|--username) must be specified"
   ERROR=1
 fi
-if [ -z "${XR_PASSWORD}" ]; then
-  >&2 echo "XR password (-p|--password) must be specified"
+if [ -z "${XR_PASSWORD:-}" ]; then
+  >&2 echo "error: XR password (-p|--password) must be specified"
   ERROR=1
 fi
-if [ -z "${KEY_PAIR_NAME}" ]; then
-  >&2 echo "EC2 key pair (-k|--key-pair) must be specified"
+if [ -z "${KEY_PAIR_NAME:-}" ]; then
+  >&2 echo "error: EC2 key pair (-k|--key-pair) must be specified"
   ERROR=1
+fi
+if [ "${KUBERNETES_VERSION}" != "1.22" ] &&
+   [ "${KUBERNETES_VERSION}" != "1.23" ] &&
+   [ "${KUBERNETES_VERSION}" != "1.24" ]; then
+    >&2 echo "error: Kubernetes version (--kubernetes-version) must be one of: 1.22, 1.23, 1.24"
+    ERROR=1
 fi
 
 if [ -n "${ERROR}" ]; then
-  >&2 echo ""
-  show_help
-  exit 1
+    >&2 echo ""
+    usage
+    >&2 echo "For more information try --help."
+    exit 1
 fi
 
 # Create a CloudFormation stack.
@@ -103,6 +148,7 @@ add_parameter Application "${APPLICATION}"
 add_parameter Platform "${PLATFORM}"
 add_parameter XrdRootUserName "${XR_USERNAME}"
 add_parameter XrdRootPassword "${XR_PASSWORD}"
+add_parameter KubernetesVersion "${KUBERNETES_VERSION}"
 
 if [ -n "${CUSTOM_AMI_ID:-}" ]; then
     add_parameter CustomAmiId "${CUSTOM_AMI_ID}"
