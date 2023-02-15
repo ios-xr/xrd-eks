@@ -12,6 +12,7 @@ import shlex
 import subprocess
 import time
 from typing import Callable
+from ._types import Kubectl
 
 
 logger = logging.getLogger(__name__)
