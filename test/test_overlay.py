@@ -49,6 +49,7 @@ def check_bgp_established(
             "-br",
             "-instance",
             "default",
+            log_output=True,
         )
     except subprocess.CalledProcessError:
         return False
@@ -71,7 +72,7 @@ def check_bgp_established(
 
 
 @pytest.mark.quickstart
-def test_quickstart(image: Image, kubectl: Kubectl, helm: Helm) -> None:
+def test_quickstart(kubectl: Kubectl, helm: Helm) -> None:
     """XRd QuickStart should install the example Overlay application."""
     expected_release_name = "xrd-example"
 
@@ -102,25 +103,23 @@ def test_quickstart(image: Image, kubectl: Kubectl, helm: Helm) -> None:
         assert False, f"BGP not established"
 
     for address in ("10.0.2.12", "10.0.3.12"):
-        p = kubectl(
-            "exec",
+        if not utils.wait_until(
+            5,
+            60,
+            utils.check_ping,
+            kubectl,
             f"{expected_release_name}-xrd1-0",
-            "--",
-            "xrenv",
-            "ping",
             address,
-            log_output=True,
-        )
-        assert "!!!!!" in p.stdout
+        ):
+            assert False, f"Could not ping {address} from f{expected_release_name}-xrd1-0"
 
     for address in ("10.0.2.11", "10.0.3.11"):
-        p = kubectl(
-            "exec",
-            f"{expected_release_name}-xrd1-0",
-            "--",
-            "xrenv",
-            "ping",
+        if not utils.wait_until(
+            5,
+            60,
+            utils.check_ping,
+            kubectl,
+            f"{expected_release_name}-xrd2-0",
             address,
-            log_output=True,
-        )
-        assert "!!!!!" in p.stdout
+        ):
+            assert False, f"Could not ping {address} from f{expected_release_name}-xrd2-0"
