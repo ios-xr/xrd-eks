@@ -439,6 +439,8 @@ Resources:
 
                   echo "fs.inotify.max_user_instances=64000" >> /etc/sysctl.d/50-xrd.conf
                   echo "fs.inotify.max_user_watches=64000" >> /etc/sysctl.d/50-xrd.conf
+                  echo "kernel.randomize_va_space=2" >> /etc/sysctl.d/50-xrd.conf
+                  echo "kernel.sched_rt_runtime_us=-1" >> /etc/sysctl.d/50-xrd.conf
                   echo "net.core.rmem_max=67108864" >> /etc/sysctl.d/50-xrd.conf
                   echo "net.core.wmem_max=67108864" >> /etc/sysctl.d/50-xrd.conf
                   echo "net.core.rmem_default=67108864" >> /etc/sysctl.d/50-xrd.conf
