@@ -42,9 +42,9 @@ SUBMODULES_DIR=submodules
 
 create_bucket() {
     if [ "${AWS_REGION}" != "us-east-1" ]; then
-        aws s3api head-bucket --bucket "${BUCKET_NAME}" >/dev/null || aws s3api create-bucket --bucket "${BUCKET_NAME}" --create-bucket-configuration "{ \"LocationConstraint\": \"${AWS_REGION}\" }"
+        aws s3api head-bucket --bucket "${BUCKET_NAME}" >/dev/null 2>&1 || aws s3api create-bucket --bucket "${BUCKET_NAME}" --create-bucket-configuration "{ \"LocationConstraint\": \"${AWS_REGION}\" }"
     else
-        aws s3api head-bucket --bucket "${BUCKET_NAME}" >/dev/null || aws s3api create-bucket --bucket "${BUCKET_NAME}"
+        aws s3api head-bucket --bucket "${BUCKET_NAME}" >/dev/null 2>&1 || aws s3api create-bucket --bucket "${BUCKET_NAME}"
     fi
 
     POLICY='{
