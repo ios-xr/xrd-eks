@@ -11,7 +11,7 @@ pipeline {
     }
 
     environment {
-        BUCKET_NAME = """${sh script: "aws sts get-caller-identity --query 'Account' --output text", returnStdout: true trim}-xrd-quickstart"""
+        BUCKET_NAME = """${sh script: "aws sts get-caller-identity --query 'Account' --output text", returnStdout: true trim()}-xrd-quickstart"""
     }
 
     stages {
