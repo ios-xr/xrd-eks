@@ -4,6 +4,7 @@
 
 
 import pytest
+import subprocess
 
 from . import utils
 from ._types import Image, Kubectl, Platform
