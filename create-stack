@@ -124,6 +124,7 @@ TEMPLATE_URL="${BUCKET_URL_PREFIX}cf-templates/${TEMPLATE_NAME}"
 CAPABILITIES="CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
 CLUSTER_NAME="xrd-cluster"
 KEY_PAIR_NAME="${KEY_PAIR_NAME:-${USER}}"
+NODE_INSTANCE_TYPE=${NODE_INSTANCE_TYPE:-"m5.2xlarge"}
 
 function add_parameter {
     KEY=$1
@@ -142,7 +143,7 @@ add_parameter RemoteAccessCIDR "0.0.0.0/0"
 add_parameter EKSPublicAccessEndpoint "Enabled"
 add_parameter KeyPairName "${KEY_PAIR_NAME}"
 
-add_parameter NodeInstanceType "m5.2xlarge"
+add_parameter NodeInstanceType "${NODE_INSTANCE_TYPE}"
 
 add_parameter Application "${APPLICATION}"
 add_parameter Platform "${PLATFORM}"
