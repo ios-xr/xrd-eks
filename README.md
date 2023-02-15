@@ -46,7 +46,7 @@ The following are optional:
 
 More details are provided for each below.
 
-### Submodules
+#### Submodules
 
 All submodules in this git repository must be checked out recursively.
 
