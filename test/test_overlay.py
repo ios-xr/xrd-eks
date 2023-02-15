@@ -3,11 +3,12 @@
 """End-to-end tests for the Overlay application."""
 
 
-import pytest
 import subprocess
 
+import pytest
+
 from . import utils
-from ._types import Image, Kubectl, Platform
+from ._types import Kubectl, Platform
 from .helm import Helm
 
 
@@ -111,7 +112,9 @@ def test_quickstart(kubectl: Kubectl, helm: Helm) -> None:
             f"{expected_release_name}-xrd1-0",
             address,
         ):
-            assert False, f"Could not ping {address} from f{expected_release_name}-xrd1-0"
+            assert (
+                False
+            ), f"Could not ping {address} from f{expected_release_name}-xrd1-0"
 
     for address in ("10.0.2.11", "10.0.3.11"):
         if not utils.wait_until(
@@ -122,4 +125,6 @@ def test_quickstart(kubectl: Kubectl, helm: Helm) -> None:
             f"{expected_release_name}-xrd2-0",
             address,
         ):
-            assert False, f"Could not ping {address} from f{expected_release_name}-xrd2-0"
+            assert (
+                False
+            ), f"Could not ping {address} from f{expected_release_name}-xrd2-0"
