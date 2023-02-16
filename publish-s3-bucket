@@ -180,6 +180,7 @@ sync_dir() {
 copy_lambda() {
     local KEY=$1
     local VERSION=$2
+    echo "copy: s3://aws-quickstart-us-east-1/${KEY} to s3://${BUCKET_NAME}/${BUCKET_KEY_PREFIX}submodules/${KEY}"
     >/dev/null aws s3api copy-object \
         --bucket "${BUCKET_NAME}" \
         --key "${BUCKET_KEY_PREFIX}submodules/${KEY}" \
@@ -208,7 +209,7 @@ sync_dir ${AMI_ASSETS_DIR}
 echo "Syncing submodules to bucket..."
 sync_dir ${SUBMODULES_DIR}
 
-echo "Syncing QuickStart packages to bucket - this may take a minute..."
+echo "Syncing QuickStart packages to bucket..."
 for LAMBDA in "${LAMBDAS[@]}"; do
     VERSION=$(get_lambda_version "${LAMBDA}")
     copy_lambda "quickstart-amazon-eks/functions/packages/${LAMBDA}" "${VERSION}"
