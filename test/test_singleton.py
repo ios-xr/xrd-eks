@@ -13,39 +13,6 @@ from ._types import Image, Kubectl, Platform
 from .helm import Helm
 
 
-def check_ping(kubectl: Kubectl, pod_name: str, address: str) -> bool:
-    """
-    Check whether it is possible to ping a given address from a given pod.
-
-    :param kubectl:
-        Kubectl context.
-
-    :param pod_name:
-        Pod from which to ping.
-
-    :param address:
-        IP address to ping.
-
-    :return:
-        True if ping is successful.
-        False otherwise.
-
-    """
-    try:
-        p = kubectl(
-            "exec",
-            pod_name,
-            "--",
-            "xrenv",
-            "ping",
-            address,
-        )
-    except subprocess.CalledProcessError:
-        return False
-
-    return "!!!!!" in p.stdout
-
-
 @pytest.fixture(autouse=True)
 def uninstall_releases(helm: Helm) -> None:
     """Uninstall all Helm releases before and after each test case."""
@@ -207,7 +174,7 @@ def test_default_cni(image: Image, kubectl: Kubectl, helm: Helm) -> None:
     )
 
     if not utils.wait_until(
-        5, 60, check_ping, kubectl, f"xrd-{image.platform}-0", address
+        5, 60, utils.check_ping, kubectl, f"xrd-{image.platform}-0", address
     ):
         assert False, f"Could not ping {address}"
 
@@ -252,6 +219,6 @@ def test_pci_last(image: Image, kubectl: Kubectl, helm: Helm):
     )
 
     if not utils.wait_until(
-        5, 60, check_ping, kubectl, f"xrd-{image.platform}-0", address
+        5, 60, utils.check_ping, kubectl, f"xrd-{image.platform}-0", address
     ):
         assert False, f"Could not ping {address}"

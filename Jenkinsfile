@@ -10,8 +10,18 @@ pipeline {
         string(name: "xrd_vrouter_tags")
     }
 
+    environment {
+        BUCKET_NAME = """${sh script: "aws sts get-caller-identity --query 'Account' --output text", returnStdout: true trim()}-xrd-quickstart"""
+    }
+
     stages {
-        stage("Publish CF templates and Helm charts") {
+        stage("Remove existing XRd S3 bucket") {
+            steps {
+                sh "aws s3 rb s3://${env.BUCKET_NAME} --force"
+            }
+        }
+
+        stage("Publish XRd S3 bucket") {
             steps {
                 sh "./publish-s3-bucket"
             }
@@ -19,15 +29,15 @@ pipeline {
 
         stage("Run tests") {
             steps {
-                sh "nox -f test/noxfile.py --                                  \
-                        --aws-region ${params.aws_region}                      \
+                sh "nox -f test/noxfile.py --                                 \
+                        --aws-region ${params.aws_region}                     \
                         --eks-kubernetes-version ${params.eks_kubernetes_version} \
                         --xrd-control-plane-repository ${params.xrd_control_plane_repository} \
                         --xrd-control-plane-tags ${params.xrd_control_plane_tags} \
                         --xrd-vrouter-repository ${params.xrd_vrouter_repository} \
-                        --xrd-vrouter-tags ${params.xrd_vrouter_tags}          \
-                        --log-file all.log                                     \
-                        --log-file-level debug                                 \
+                        --xrd-vrouter-tags ${params.xrd_vrouter_tags}         \
+                        --log-file all.log                                    \
+                        --log-file-level debug                                \
                         --junitxml results.xml"
             }
         }

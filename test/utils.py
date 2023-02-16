@@ -1,6 +1,7 @@
 # utils.py
 
 __all__ = (
+    "check_ping",
     "run_cmd",
     "wait_until",
 )
@@ -12,8 +13,43 @@ import subprocess
 import time
 from typing import Callable
 
+from ._types import Kubectl
+
 
 logger = logging.getLogger(__name__)
+
+
+def check_ping(kubectl: Kubectl, pod_name: str, address: str) -> bool:
+    """
+    Check whether it is possible to ping a given address from a given pod.
+
+    :param kubectl:
+        Kubectl context.
+
+    :param pod_name:
+        Pod from which to ping.
+
+    :param address:
+        IP address to ping.
+
+    :return:
+        True if ping is successful.
+        False otherwise.
+
+    """
+    try:
+        p = kubectl(
+            "exec",
+            pod_name,
+            "--",
+            "xrenv",
+            "ping",
+            address,
+        )
+    except subprocess.CalledProcessError:
+        return False
+
+    return "!!!!!" in p.stdout
 
 
 def run_cmd(
