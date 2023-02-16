@@ -15,25 +15,19 @@ show_help() {
     >&2 echo "Must be run from the root of the xrd-eks repository."
 }
 
-LIST_LAMBDA_VERSIONS=0
-
 # Parse the arguments
 while [ $# -gt 0 ]; do
-    case $1 in
-        -h|--help )
-            show_help
-            exit 255
-            ;;
-        --list-lambda-versions )
-            LIST_LAMBDA_VERSIONS=1
-            shift
-            ;;
-        * )
-            >&2 echo "Unknown option $1"
-            show_help
-            exit 1
-            ;;
-    esac
+  case $1 in
+    -h|--help )
+      show_help
+      exit 255
+      ;;
+    * )
+      >&2 echo "Unknown option $1"
+      show_help
+      exit 1
+      ;;
+  esac
 done
 
 ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
@@ -71,7 +65,8 @@ LAMBDAS=(
     "registerType/lambda.zip"
 )
 
-# Pinned versions of lambdas in the upstream QuickStart bucket.
+# Pinned versions of lambdas in the upstream QuickStart bucket, in the
+# us-east-1 region (bucket name 'aws-quickstart-us-east-1').
 get_lambda_version() {
     case $1 in
         "CleanupLambdas/lambda.zip")
@@ -87,7 +82,7 @@ get_lambda_version() {
             echo "TXgf9J8CzPlR9pIq2q8PAGichTjSVVQs"
             ;;
         "EksClusterResource/awsqs-eks-cluster.zip")
-            echo "8nSWtXCsy9RKhTj80Fqxxy8BqPfdTVkl"
+            echo "BH57pAffePQxbR3HVmok1FIeuQAEwPQB"
             ;;
         "FargateProfile/lambda.zip")
             echo "6TSPoPHqDS5RBuhHXK7c5nY1cWSQQWAN"
@@ -96,40 +91,40 @@ get_lambda_version() {
             echo "aHK8rwSAtRi_VvXb93WSZeAPfkJRP1i1"
             ;;
         "HelmReleaseResource/awsqs-kubernetes-helm.zip")
-            echo "xNMvfhXEo5m.QiVi42r2VGEduQfitDe9"
+            echo "mICndQson0cH88MTYmSHI8nD34BtUv6L"
             ;;
         "KubeGet/lambda.zip")
             echo "D4Ie05qzJFw9phLxGl0c4jokEDe_3vOr"
             ;;
         "KubeManifest/lambda.zip")
-            echo "eJ31WdSxuVyMjS1nBuHTVFUl.C9RvMiN"
+            echo "FjNMguZ.ewamJlVG5FA7njCIPOY_wfBv"
             ;;
         "ResourceReader/lambda.zip")
-            echo "M5QA7S.xPYbQ.Iu0hMaZoR49Mi3YpuSn"
+            echo "CPRyESVYBRyOn88XbJBRff9BH6FdUPNV"
             ;;
         "awscliLayer/lambda.zip")
-            echo "yE8GC35WKjLIkee5PL.Y7eCFwnlcREfW"
+            echo "5bq9jw0Uy6nWpvAdzB3jHnTOsXqVAdNe"
             ;;
         "boto3Layer/lambda.zip")
-            echo "MS7X8oS8XwglcBtvEO.H7wJkE9TldXaK"
+            echo "_tm_qNEfTaXbxhdEoMIsevtndWWgVYW8"
             ;;
         "crhelperLayer/lambda.zip")
             echo "JiHzMw61.BY6cixU9XKvkYdjpf2Pw2o5"
             ;;
         "kubectlLayer/lambda.zip")
-            echo "6vP5cViYr5Rgq5UjvLPQAT4Rk.ZHm.FC"
+            echo "js0Jh5I5tHcHm3uDQPmzDHefiWrVzLdv"
             ;;
         "kubernetesResources/awsqs_kubernetes_apply.zip")
-            echo "KSvh_7_YqcOZbD4MiSvQaKZZbnsWne0o"
+            echo "zur88zGrO3y28JtyZkFHdgrIOWgZiQVA"
             ;;
         "kubernetesResources/awsqs_kubernetes_apply_vpc.zip")
-            echo "4N_f.OTK6buavdceOsH.RUy3Qyxes643"
+            echo "h5p9y6olTWxdrOkk81ZZZbcV3w15K_10"
             ;;
         "kubernetesResources/awsqs_kubernetes_get.zip")
-            echo "VqcyMGXFBp5N0R9YFz5RZ9vhdezagn6p"
+            echo "TOU3OQH4ZjItln8yMy1cX2N1o4ET6tAQ"
             ;;
         "kubernetesResources/awsqs_kubernetes_get_vpc.zip")
-            echo "Tp.TsI47FW_hGmRte1Kna5ujiZ.m5aAq"
+            echo "mi26IfkUgVG4kCZ2EB2Zn915cYgJPFLL"
             ;;
         "registerCustomResource/lambda.zip")
             echo "VYQpmfwS.PKRdHIAXTtWe_.K1dBuc3XX"
@@ -142,7 +137,7 @@ get_lambda_version() {
             exit 2
     esac
 }
-    
+
 create_bucket() {
     if [ "${AWS_REGION}" != "us-east-1" ]; then
         aws s3api head-bucket --bucket "${BUCKET_NAME}" >/dev/null 2>&1 || aws s3api create-bucket --bucket "${BUCKET_NAME}" --create-bucket-configuration "{ \"LocationConstraint\": \"${AWS_REGION}\" }"
@@ -177,6 +172,8 @@ sync_dir() {
     aws s3 sync --delete "./${DIR}/" "s3://${BUCKET_NAME}/${BUCKET_KEY_PREFIX}${DIR}/"
 }
 
+# Copy a lambda from the upstream QuickStart bucket, in us-east-1, to the
+# user's XRd bucket.
 copy_lambda() {
     local KEY=$1
     local VERSION=$2
@@ -188,23 +185,6 @@ copy_lambda() {
         --metadata-directive REPLACE
     echo " done"
 }
-
-list_lambda_versions() {
-    local LAMBDA=$1
-    aws s3api list-object-versions \
-        --bucket "aws-quickstart-${AWS_REGION}" \
-        --prefix "quickstart-amazon-eks/functions/packages/${LAMBDA}" \
-        --query 'Versions[].[Key,LastModified,VersionId]' \
-        --no-cli-pager
-}
-
-if [ ${LIST_LAMBDA_VERSIONS} -eq 1 ]; then
-    echo "Listing upstream QuickStart lambda versions..."
-    for LAMBDA in "${LAMBDAS[@]}"; do
-        get_latest_version "${LAMBDA}"
-    done
-    exit 0
-fi
 
 echo "Checking git submodules are recursively checked out..."
 git submodule status --recursive 2>/dev/null | while IFS= read -r LINE; do
@@ -227,7 +207,7 @@ sync_dir ${AMI_ASSETS_DIR}
 echo "Syncing submodules to bucket..."
 sync_dir ${SUBMODULES_DIR}
 
-echo "Syncing QuickStart packages to bucket, this may take a minute..."
+echo "Syncing QuickStart packages to bucket..."
 for LAMBDA in "${LAMBDAS[@]}"; do
     VERSION=$(get_lambda_version "${LAMBDA}")
     copy_lambda "quickstart-amazon-eks/functions/packages/${LAMBDA}" "${VERSION}"
