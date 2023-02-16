@@ -38,6 +38,7 @@ Parameters:
   SubnetId:
     Description: Subnet where the instance building the AMI is launched. If left empty this uses the default subnet.
     Type: String
+    Default: ""
 
 Conditions:
   EnsureEksQsSharedResources: !Equals [ !Ref EksQsSharedResources, 'AutoDetect' ]
