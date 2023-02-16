@@ -40,6 +40,104 @@ CF_DIR=cf-templates
 AMI_ASSETS_DIR=ami_assets
 SUBMODULES_DIR=submodules
 
+# Lambdas in the upstream QuickStart bucket that the XRd stack depends on.
+LAMBDAS=(
+    "CleanupLambdas/lambda.zip"
+    "CleanupLoadBalancers/lambda.zip"
+    "CleanupSecurityGroupDependencies/lambda.zip"
+    "DeleteBucketContents/lambda.zip"
+    "EksClusterResource/awsqs-eks-cluster.zip"
+    "FargateProfile/lambda.zip"
+    "GetCallerArn/lambda.zip"
+    "HelmReleaseResource/awsqs-kubernetes-helm.zip"
+    "KubeGet/lambda.zip"
+    "KubeManifest/lambda.zip"
+    "ResourceReader/lambda.zip"
+    "awscliLayer/lambda.zip"
+    "boto3Layer/lambda.zip"
+    "crhelperLayer/lambda.zip"
+    "kubectlLayer/lambda.zip"
+    "kubernetesResources/awsqs_kubernetes_apply.zip"
+    "kubernetesResources/awsqs_kubernetes_apply_vpc.zip"
+    "kubernetesResources/awsqs_kubernetes_get.zip"
+    "kubernetesResources/awsqs_kubernetes_get_vpc.zip"
+    "registerCustomResource/lambda.zip"
+    "registerType/lambda.zip"
+)
+
+# Pinned versions of lambdas in the upstream QuickStart bucket, in the
+# us-east-1 region (bucket name 'aws-quickstart-us-east-1').
+get_lambda_version() {
+    case $1 in
+        "CleanupLambdas/lambda.zip")
+            echo "xa.Oy15ZoH7.mIp_BuRwsL53sGNbT7WL"
+            ;;
+        "CleanupLoadBalancers/lambda.zip")
+            echo "5CvkA46x0j2uGCcYVFeQwRhQlDnOonex"
+            ;;
+        "CleanupSecurityGroupDependencies/lambda.zip")
+            echo "gBBk2SBA0PMtXpLCX3NfVcyx4iLYQffa"
+            ;;
+        "DeleteBucketContents/lambda.zip")
+            echo "TXgf9J8CzPlR9pIq2q8PAGichTjSVVQs"
+            ;;
+        "EksClusterResource/awsqs-eks-cluster.zip")
+            echo "BH57pAffePQxbR3HVmok1FIeuQAEwPQB"
+            ;;
+        "FargateProfile/lambda.zip")
+            echo "6TSPoPHqDS5RBuhHXK7c5nY1cWSQQWAN"
+            ;;
+        "GetCallerArn/lambda.zip")
+            echo "aHK8rwSAtRi_VvXb93WSZeAPfkJRP1i1"
+            ;;
+        "HelmReleaseResource/awsqs-kubernetes-helm.zip")
+            echo "mICndQson0cH88MTYmSHI8nD34BtUv6L"
+            ;;
+        "KubeGet/lambda.zip")
+            echo "D4Ie05qzJFw9phLxGl0c4jokEDe_3vOr"
+            ;;
+        "KubeManifest/lambda.zip")
+            echo "FjNMguZ.ewamJlVG5FA7njCIPOY_wfBv"
+            ;;
+        "ResourceReader/lambda.zip")
+            echo "CPRyESVYBRyOn88XbJBRff9BH6FdUPNV"
+            ;;
+        "awscliLayer/lambda.zip")
+            echo "5bq9jw0Uy6nWpvAdzB3jHnTOsXqVAdNe"
+            ;;
+        "boto3Layer/lambda.zip")
+            echo "_tm_qNEfTaXbxhdEoMIsevtndWWgVYW8"
+            ;;
+        "crhelperLayer/lambda.zip")
+            echo "JiHzMw61.BY6cixU9XKvkYdjpf2Pw2o5"
+            ;;
+        "kubectlLayer/lambda.zip")
+            echo "js0Jh5I5tHcHm3uDQPmzDHefiWrVzLdv"
+            ;;
+        "kubernetesResources/awsqs_kubernetes_apply.zip")
+            echo "zur88zGrO3y28JtyZkFHdgrIOWgZiQVA"
+            ;;
+        "kubernetesResources/awsqs_kubernetes_apply_vpc.zip")
+            echo "h5p9y6olTWxdrOkk81ZZZbcV3w15K_10"
+            ;;
+        "kubernetesResources/awsqs_kubernetes_get.zip")
+            echo "TOU3OQH4ZjItln8yMy1cX2N1o4ET6tAQ"
+            ;;
+        "kubernetesResources/awsqs_kubernetes_get_vpc.zip")
+            echo "mi26IfkUgVG4kCZ2EB2Zn915cYgJPFLL"
+            ;;
+        "registerCustomResource/lambda.zip")
+            echo "VYQpmfwS.PKRdHIAXTtWe_.K1dBuc3XX"
+            ;;
+        "registerType/lambda.zip")
+            echo "s3kDkK67t2.qn1caBkqBLlHL2Bblf.b9"
+            ;;
+        *)
+            2>&1 "Unrecognized lambda: $1"
+            exit 2
+    esac
+}
+
 create_bucket() {
     if [ "${AWS_REGION}" != "us-east-1" ]; then
         aws s3api head-bucket --bucket "${BUCKET_NAME}" >/dev/null 2>&1 || aws s3api create-bucket --bucket "${BUCKET_NAME}" --create-bucket-configuration "{ \"LocationConstraint\": \"${AWS_REGION}\" }"
@@ -74,6 +172,22 @@ sync_dir() {
     aws s3 sync --delete "./${DIR}/" "s3://${BUCKET_NAME}/${BUCKET_KEY_PREFIX}${DIR}/"
 }
 
+# Copy a lambda from the upstream QuickStart bucket, in us-east-1, to the
+# user's XRd bucket.
+# Note that we _must_ copy from 'aws-quickstart-us-east-1', regardless of the
+# user's current AWS region, because the pinned versions defined above are
+# valid only for this bucket and not for QuickStart buckets in other regions.
+copy_lambda() {
+    local KEY=$1
+    local VERSION=$2
+    echo "copy: s3://aws-quickstart-us-east-1/${KEY} to s3://${BUCKET_NAME}/${BUCKET_KEY_PREFIX}submodules/${KEY}"
+    >/dev/null aws s3api copy-object \
+        --bucket "${BUCKET_NAME}" \
+        --key "${BUCKET_KEY_PREFIX}submodules/${KEY}" \
+        --copy-source "aws-quickstart-us-east-1/${KEY}?versionId=${VERSION}" \
+        --metadata-directive REPLACE
+}
+
 echo "Checking git submodules are recursively checked out..."
 git submodule status --recursive 2>/dev/null | while IFS= read -r LINE; do
     if [ "${LINE:0:1}" = "-" ]; then
@@ -96,9 +210,10 @@ echo "Syncing submodules to bucket..."
 sync_dir ${SUBMODULES_DIR}
 
 echo "Syncing QuickStart packages to bucket..."
-aws s3 sync --delete --metadata-directive REPLACE \
-    "s3://aws-quickstart-${AWS_REGION}/quickstart-amazon-eks/functions/packages" \
-    "s3://${BUCKET_NAME}/${BUCKET_KEY_PREFIX}submodules/quickstart-amazon-eks/functions/packages"
+for LAMBDA in "${LAMBDAS[@]}"; do
+    VERSION=$(get_lambda_version "${LAMBDA}")
+    copy_lambda "quickstart-amazon-eks/functions/packages/${LAMBDA}" "${VERSION}"
+done
 
 # Output the details to be used in the CF stacks.
 echo ""
