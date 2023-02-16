@@ -174,16 +174,17 @@ sync_dir() {
 
 # Copy a lambda from the upstream QuickStart bucket, in us-east-1, to the
 # user's XRd bucket.
+# Note that we _must_ copy from 'aws-quickstart-us-east-1', regardless of the
+# user's current AWS region, because the pinned versions defined above are
+# valid only for this bucket and not for QuickStart buckets in other regions.
 copy_lambda() {
     local KEY=$1
     local VERSION=$2
-    echo -n "Copying $KEY, version $VERSION..."
     >/dev/null aws s3api copy-object \
         --bucket "${BUCKET_NAME}" \
         --key "${BUCKET_KEY_PREFIX}submodules/${KEY}" \
-        --copy-source "aws-quickstart-${AWS_REGION}/${KEY}?versionId=${VERSION}" \
+        --copy-source "aws-quickstart-us-east-1/${KEY}?versionId=${VERSION}" \
         --metadata-directive REPLACE
-    echo " done"
 }
 
 echo "Checking git submodules are recursively checked out..."
@@ -207,7 +208,7 @@ sync_dir ${AMI_ASSETS_DIR}
 echo "Syncing submodules to bucket..."
 sync_dir ${SUBMODULES_DIR}
 
-echo "Syncing QuickStart packages to bucket..."
+echo "Syncing QuickStart packages to bucket - this may take a minute..."
 for LAMBDA in "${LAMBDAS[@]}"; do
     VERSION=$(get_lambda_version "${LAMBDA}")
     copy_lambda "quickstart-amazon-eks/functions/packages/${LAMBDA}" "${VERSION}"
