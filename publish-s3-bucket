@@ -145,15 +145,9 @@ get_lambda_version() {
     
 create_bucket() {
     if [ "${AWS_REGION}" != "us-east-1" ]; then
-        aws s3api head-bucket --bucket "${BUCKET_NAME}" >/dev/null 2>&1 || {
-            aws s3api create-bucket \
-                --bucket "${BUCKET_NAME}" \
-                --create-bucket-configuration "{ \"LocationConstraint\": \"${AWS_REGION}\" }"
-        }
+        aws s3api head-bucket --bucket "${BUCKET_NAME}" >/dev/null 2>&1 || aws s3api create-bucket --bucket "${BUCKET_NAME}" --create-bucket-configuration "{ \"LocationConstraint\": \"${AWS_REGION}\" }"
     else
-        aws s3api head-bucket --bucket "${BUCKET_NAME}" >/dev/null 2>&1 || {
-            aws s3api create-bucket --bucket "${BUCKET_NAME}"
-        }
+        aws s3api head-bucket --bucket "${BUCKET_NAME}" >/dev/null 2>&1 || aws s3api create-bucket --bucket "${BUCKET_NAME}"
     fi
 
     POLICY='{
@@ -217,7 +211,7 @@ git submodule status --recursive 2>/dev/null | while IFS= read -r LINE; do
     if [ "${LINE:0:1}" = "-" ]; then
         2>&1 echo "Submodules are not recursively checked out."
         2>&1 echo "Run 'git submodule update --init --recursive' and try again."
-        exit 2
+        exit 1
     fi
 done
 

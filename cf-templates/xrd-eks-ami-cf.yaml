@@ -35,8 +35,13 @@ Parameters:
     Type: String
     Default: m5.2xlarge
 
+  SubnetId:
+    Description: Subnet where the instance building the AMI is launched. If left empty this uses the default subnet.
+    Type: String
+
 Conditions:
   EnsureEksQsSharedResources: !Equals [ !Ref EksQsSharedResources, 'AutoDetect' ]
+  SubnetIdProvided: !Not [ !Equals [ !Ref SubnetId, '' ] ]
 
 Resources:
 
@@ -76,6 +81,7 @@ Resources:
     Properties:
       ImageId: !Ref BaseImageId
       InstanceType: !Ref InstanceType
+      SubnetId: !If [ SubnetIdProvided, !Ref SubnetId, !Ref AWS::NoValue ]
       UserData:
         "Fn::Base64": !Sub
           - |-
