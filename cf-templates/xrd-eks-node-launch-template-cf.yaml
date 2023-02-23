@@ -78,7 +78,7 @@ Parameters:
     Description: ID of subnet for the primary (K8S) ENI for XRd worker nodes (e.g.,subnet-a0246123).
     Type: AWS::EC2::Subnet::Id
   NodeInstanceType:
-    Default: m5n.2xlarge
+    Default: m5.2xlarge
     AllowedValues:
       - m5.2xlarge
       - m5.24xlarge

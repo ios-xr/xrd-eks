@@ -11,7 +11,7 @@ Parameters:
     Default: ""
     Description: AMI id of image suitable for running XRd vRouter
   NodeInstanceType:
-    Default: m5n.2xlarge
+    Default: m5.2xlarge
     AllowedValues:
       - m5.2xlarge
       - m5.24xlarge

@@ -181,7 +181,7 @@ Parameters:
     Description: '(Optional) AMI ID to use for cluster worker nodes.'
   NodeInstanceType:
     Type: String
-    Default: 'm5n.2xlarge'
+    Default: 'm5.2xlarge'
     AllowedValues:
       - 'm5.2xlarge'
       - 'm5.24xlarge'
