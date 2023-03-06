@@ -138,6 +138,7 @@ Resources:
         # present.
         IamOidcProvider: "Disabled"
         KubernetesVersion: !Ref KubernetesVersion
+        BastionEnableTCPForwarding: true
 
   EKSStack:
     Type: AWS::CloudFormation::Stack
