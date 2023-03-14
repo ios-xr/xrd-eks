@@ -12,9 +12,19 @@ if [ -n "${ISOLATED_CORES}" ]; then
   sudo sed "s/isolated_cores=/isolated_cores=${ISOLATED_CORES}/" -i /etc/tuned/xrd-eks-node-variables.conf
 fi
 
-# If HUGEPAGES_GB is set, copy it into the tuned settings.
+# If HUGEPAGES_GB is set, copy it into the tuned settings and hugetlb service.
 if [ -n "${HUGEPAGES_GB}" ]; then
-  sudo sed "s/hugepages_gb=.*/hugepages_gb=${HUGEPAGES_GB}/" -i /etc/tuned/xrd-eks-node-variables.conf
+  # Get the number of NUMA nodes.
+  numa_node_count=$(lscpu | grep -F "NUMA node(s)" | awk '{ print $3 }')
+
+  # Multiply the requested hugepages by the number of NUMA nodes at boot
+  # so we're guaranteed a contiguous block of pages on each node.
+  # Then during early boot the systemd service will unreserve all the
+  # hugepages from all nodes except the first.
+  boot_hugepages=$((HUGEPAGES_GB * numa_node_count))
+
+  sudo sed "s/hugepages_gb=.*/hugepages_gb=${boot_hugepages}/" -i /etc/tuned/xrd-eks-node-variables.conf
+  sudo sed "s/NUMPAGES/${HUGEPAGES_GB}/" -i /usr/lib/systemd/hugetlb-reserve-pages.sh
 fi
 
 # Start tuned.

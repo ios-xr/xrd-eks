@@ -36,6 +36,8 @@ AMI_ASSETS="""
 /etc/tuned/xrd-eks-node-variables.conf
 /etc/tuned/xrd-eks-node/defirqaffinity.py
 /etc/tuned/xrd-eks-node/tuned.conf
+/usr/lib/systemd/hugetlb-reserve-pages.sh
+/usr/lib/systemd/system/hugetlb-gigantic-pages.service
 """
 
 DPDK_SRC=${DPDK_SRC:-"https://fast.dpdk.org/rel/dpdk-19.11.12.tar.xz"}
