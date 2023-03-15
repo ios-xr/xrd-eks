@@ -8,15 +8,15 @@
 # /sys/devices/system/node/online is non-trivial.
 #
 # NUMPAGES should be replaced with the required number of pages before use.
-nodes_path=h
-if [ ! -d $nodes_path ]; then
+nodes_path=/sys/devices/system/node/
+if [ ! -d "$nodes_path" ]; then
 	echo "ERROR: $nodes_path does not exist"
 	exit 1
 fi
 
 reserve_pages()
 {
-	echo "$1" > "$nodes_path/$2/hugepages/hugepages-1048576kB/nr_hugepages"
+	echo "$1" > "$nodes_path/node$2/hugepages/hugepages-1048576kB/nr_hugepages"
 }
 
 # Get the number of NUMA nodes.
