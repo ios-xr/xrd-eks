@@ -1,0 +1,54 @@
+# cSpell: Disable
+#
+# User taskcat configuration.
+#
+# This file defines general parameters used for all taskcat invoations.
+#
+# Before using This file should be copied to ~/.taskcat.yml and updated with
+# your values (see https://aws-ia.github.io/taskcat/docs/usage/GENERAL_USAGE/#config-files
+# for precedence rules).
+#
+# You should also check .taskcat.yml for repository taskcat settings.
+general:
+  # Name of the S3 bucket to use.
+  # To be consistent with other scripts (in particular ./publish-s3-bucket)
+  # this should be the result of the following command:
+  # echo $(aws sts get-caller-identity --query "Account" --output text)-xrd-quickstart
+  s3_bucket: XXX
+  auth:
+    # Reference to profile in ~/.aws/credentials
+    default: default
+  regions:
+    # Working region.
+    - "us-east-1"
+
+  parameters:
+    # KeyPairName - SSH keys used to access EC2 instances created.
+    KeyPairName: XXX
+
+    # AdditionalEKSAdmin(User|Role)Arn - Additional admin access to EKS cluster.
+    # AdditionalEKSAdminUserArn:
+    # AdditionalEKSAdminRoleArn:
+
+    # SubnetID is the subnet the worker nodes' control plane interface IP
+    # is allocated from. This is required for stacks that instatiate nodes
+    # in a pre-existing VPC, and will change whenever a VPC is (re)created.
+    #
+    # The tagged subnet 'PrivateSubnet1A' is typically used:
+    # aws ec2 describe-subnets --query 'Subnets[?not_null(Tags[?Value == `PrivateSubnet1A`])].SubnetId | [0]' --output text
+    # SubnetID: XXX
+
+    # These are other parameters it can often be helpful to tweak (the
+    # non-default value is listed below)
+    # Platform: ControlPlane
+    # CustomAmiId: "ami-0da399c2207bb3d21"
+    # NodeInstanceType: m5n.24xlarge
+
+    # The following parameters need to be provided to use the
+    # xrd-eks-existing-vpc test and are outputs from the xrd-vpc stack.
+    # Note: For some reason both public subnet IDs need to be passed to get a
+    # Bastion host (technically a bug - only one should be needed).
+    # PrivateSubnet1ID: subnet-06f0aa03c3dd84373
+    # PrivateSubnet2ID: subnet-0db30ad6a38213c92
+    # PublicSubnet1ID: subnet-076ead9e075746fdd
+    # PublicSubnet2ID: subnet-0952d7fc8ed363578
