@@ -50,3 +50,7 @@ sudo tuned-adm active
 # Load the kernel module - need to load uio first.
 sudo modprobe uio
 sudo modprobe igb_uio wc_activate=1
+
+# Enable and run the hugepage configuration service.
+sudo systemctl enable hugetlb-gigantic-pages
+sudo systemctl start hugetlb-gigantic-pages
