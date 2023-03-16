@@ -216,7 +216,7 @@ expression, as opposed to being limited to a static template.
 * `xrd-eks-existing-vpc` - Create an IPv4 EKS control plane suitable for running XRd using an existing VPC.
   * Augments `amazon-eks-entrypoint-existing-vpc` with XRd K8S settings and installs Multus.
   * Includes provisioning a Bastion for access to worker nodes
-  * IPv6 EKS clusters are not supported.
+  * This template does not support launching an IPv6 EKS cluster.
 * `xrd-eks-ami` - Creates an AMI for the EKS worker node which is able to run XRd vRouter.
   * Builds and installs a patched version of the `igb_uio` driver to add `write-combine` supported which in turn is needed to achieve high volume and low latency on AWS ENA interfaces.
   * Installs a `tuned` profile to isolate cores and prevent interrupts from running on data processing cores etc.
