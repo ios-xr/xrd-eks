@@ -187,6 +187,12 @@ Resources:
         - "iam list-instance-profiles --query 'InstanceProfiles[].{role: Roles[0].RoleName, arn: Arn}[?role==`${NodeInstanceRoleName}`] | [0]'"
         - NodeInstanceRoleName: eks-quickstart-UnmanagedNodeInstance
       IdField: 'arn'
+  ClusterEndpoint:
+    Type: Custom::CliQuery
+    Properties:
+      ServiceToken: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:eks-quickstart-ResourceReader'
+      AwsCliCommand: !Sub "eks describe-cluster --name ${EKSClusterName} --query '{Endpoint: cluster.endpoint, CaData: cluster.certificateAuthority.data}'"
+      IdField: 'Endpoint'
   ClusterNodeSecurityGroup:
     Type: Custom::CliQuery
     Properties:
@@ -204,7 +210,11 @@ Resources:
     Type: Custom::CliQuery
     Properties:
       ServiceToken: !Sub ['arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-ResourceReader', {Prefix: 'eks-quickstart'}]
-      AwsCliCommand: bar
+      AwsCliCommand: !Sub
+       - "ssm get-parameter --name '${ParamPath}' --query Parameter"
+       - ParamPath: !Sub
+           - "/aws/service/eks/optimized-ami/${KubernetesVersion}/${OS}/recommended/image_id"
+           - OS: amazon-linux-2
       IdField: 'Value'
 
   XrdQsAmi:
@@ -443,16 +453,16 @@ Resources:
                   ${VRouterSetup}
                   ${ProxySetup}
                   /etc/eks/bootstrap.sh ${EKSClusterName} ${ExtraArgs} \
-                                    --b64-cluster-ca \
-                                    --apiserver-endpoint  || signal 1
+                                    --b64-cluster-ca ${ClusterEndpoint.CaData} \
+                                    --apiserver-endpoint ${ClusterEndpoint}  || signal 1
                   ${ProxyPostSetup}
                   ${VRouterReboot}
                 - ExtraArgs: !If
                     - AddExtraArgs
                     - !Sub
                       - "--kubelet-extra-args '${LabelsArg} ${TaintsArg}'"
-                      - LabelsArg: !If [AddLabels, "foo", ""]
-                        TaintsArg: !If [AddTaints, "bar", ""]
+                      - LabelsArg: !If [AddLabels, !Sub "--node-labels=${Labels}", ""]
+                        TaintsArg: !If [AddTaints, !Sub "--register-with-taints=${Taints}", ""]
                     - ""
                   ProxySetup: !If
                     - EnableProxy
