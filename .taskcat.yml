@@ -46,7 +46,7 @@ general:
     #
     # The tagged subnet 'PrivateSubnet1A' is typically used:
     # aws ec2 describe-subnets --query 'Subnets[?not_null(Tags[?Value == `PrivateSubnet1A`])].SubnetId | [0]' --output text
-    # SubnetID: XXX
+    #SubnetID: XXX
 
     # Default XRd platform (vRouter by default)
     #Platform: XXX
@@ -85,7 +85,7 @@ tests:
       # to run this stack.
       # Note: For some reason both public subnet IDs need to be passed to get a
       # Bastion host (technically a bug - only one should be needed).
-      #PrivateSubnet1ID: XXX
+      PrivateSubnet1ID: XXX
       #PrivateSubnet2ID: XXX
       #PublicSubnet1ID: XXX
       #PublicSubnet2ID: XXX
@@ -158,8 +158,6 @@ tests:
   xrd-singleton-vrouter-14interfaces:
     template: cf-templates/xrd-singleton-existing-eks-cf.yaml
     parameters:
-      SubnetID: ""
-      NodeIP: ""
       NodeInstanceType: m5.24xlarge
       XrdInterface1IP: "10.0.1.110/24"
       XrdInterface1SubnetTagValue: 1

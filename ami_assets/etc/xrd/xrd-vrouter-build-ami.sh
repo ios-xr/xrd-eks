@@ -28,6 +28,7 @@ DPDK_BUILD_GROUP="Development Tools"
 # The ami_assets to retrieve from the S3 bucket
 AMI_ASSETS="""
 /etc/xrd/bootstrap.sh
+/etc/xrd/hugetlb-reserve-pages.sh
 /etc/modprobe.d/vfio.conf
 /etc/modprobe.d/igb_uio.conf
 /etc/modules-load.d/vfio-pci.conf
@@ -36,7 +37,6 @@ AMI_ASSETS="""
 /etc/tuned/xrd-eks-node-variables.conf
 /etc/tuned/xrd-eks-node/defirqaffinity.py
 /etc/tuned/xrd-eks-node/tuned.conf
-/usr/lib/systemd/hugetlb-reserve-pages.sh
 /usr/lib/systemd/system/hugetlb-gigantic-pages.service
 """
 
