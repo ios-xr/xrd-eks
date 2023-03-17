@@ -21,7 +21,7 @@ numa_node_count=$(lscpu | grep -F "NUMA node(s)" | awk '{ print $3 }')
 boot_hugepages=$((HUGEPAGES_GB * numa_node_count))
 
 sudo sed "s/hugepages_gb=.*/hugepages_gb=${boot_hugepages}/" -i /etc/tuned/xrd-eks-node-variables.conf
-sudo echo "HUGEPAGES_GB=${HUGEPAGES_GB}" | sudo tee /etc/xrd/hugetlb-reserve-env.conf
+echo "HUGEPAGES_GB=${HUGEPAGES_GB}" | sudo tee /etc/xrd/hugetlb-reserve-env.conf
 
 # Start tuned.
 sudo systemctl start tuned

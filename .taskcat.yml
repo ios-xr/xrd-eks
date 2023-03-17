@@ -114,7 +114,7 @@ tests:
       XrdInterface2SubnetTagValue: 2
       XrdInterface3SubnetTagValue: 3
 
-  # Launch a worker node and run a single XRd vRouter instance on it.
+  # Launch a worker node and run a single XRd vRouter container on it.
   xrd-singleton-vrouter:
     template: cf-templates/xrd-singleton-existing-eks-cf.yaml
 
@@ -124,20 +124,20 @@ tests:
     parameters:
       SkipHelmRelease: "Yes"
 
-  # Launch a single XRd vRouter instance on an existing worker node.
+  # Launch a single XRd vRouter container on an existing worker node.
   xrd-singleton-vrouter-release:
     template: cf-templates/xrd-singleton-existing-eks-cf.yaml
     parameters:
       SkipNodeStack: "Yes"
 
-  # Launch a worker node and run a single XRd Control Plane instance on it
-  # (e.g. an instance launched by xrd-singelton-vrouter-release).
+  # Launch a worker node and run a single XRd Control Plane container on it
+  # (e.g. an instance launched by xrd-singleton-vrouter-release).
   xrd-singleton-control-plane:
     template: cf-templates/xrd-singleton-existing-eks-cf.yaml
     parameters:
       Platform: ControlPlane
 
-  # Launch a worker node suitable for a single XRd Control Plane instance
+  # Launch a worker node suitable for a single XRd Control Plane container
   # (e.g. an instance launched by xrd-singleton-control-plane-release).
   xrd-singleton-control-plane-infra:
     template: cf-templates/xrd-singleton-existing-eks-cf.yaml
@@ -145,7 +145,7 @@ tests:
       Platform: ControlPlane
       SkipHelmRelease: "Yes"
 
-  # Launch a single XRd Control Plane instance on an existing worker node.
+  # Launch a single XRd Control Plane container on an existing worker node.
   xrd-singleton-control-plane-release:
     template: cf-templates/xrd-singleton-existing-eks-cf.yaml
     parameters:
