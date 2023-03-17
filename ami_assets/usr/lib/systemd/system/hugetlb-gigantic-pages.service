@@ -8,7 +8,8 @@ ConditionKernelCommandLine=hugepagesz=1G
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/lib/systemd/hugetlb-reserve-pages.sh
+ExecStart=/etc/xrd/hugetlb-reserve-pages.sh
+EnvironmentFile=/etc/xrd/hugetlb-reserve-env.conf
 
 [Install]
 WantedBy=sysinit.target

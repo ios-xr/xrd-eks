@@ -12,18 +12,17 @@
 #
 # You should also check .user_taskcat.yml for more general taskcat settings.
 general:
-  s3_bucket: 917312115843-xrd-quickstart
   parameters:
     # =========================================================================
     # These settings should be left alone unless you know what you're doing.
-    # These parameters identify the S3 buckets where the CloudForomation
+    # These parameters identify the S3 buckets where the CloudFormation
     # resources can be found.
     XrdS3BucketName: $[taskcat_autobucket]
     # The key prefix needs to match <project name>/ (where project name is
     # configured below) to work with taskcat's autosync.
     XrdS3KeyPrefix: xrd-eks/
     XrdS3BucketRegion: $[taskcat_current_region]
-    # Where the xrd-overlay-overlay Helm chart can be found.
+    # Where the xrd-overlay Helm chart can be found.
     HelmRepository: https://ios-xr.github.io/xrd-eks/
     # =========================================================================
 
@@ -36,6 +35,21 @@ general:
     # Remote access to the EKS cluster.
     RemoteAccessCIDR: "0.0.0.0/0"
     EKSPublicAccessEndpoint: Enabled
+
+    # Worker node settings.
+    #CustomAmiId: XXX
+    #NodeInstanceType: XXX
+
+    # SubnetID is the subnet the worker nodes' control plane interface IP
+    # is allocated from. This is required for stacks that instantiate nodes
+    # in a pre-existing VPC, and will change whenever a VPC is (re)created.
+    #
+    # The tagged subnet 'PrivateSubnet1A' is typically used:
+    # aws ec2 describe-subnets --query 'Subnets[?not_null(Tags[?Value == `PrivateSubnet1A`])].SubnetId | [0]' --output text
+    # SubnetID: XXX
+
+    # Default XRd platform (vRouter by default)
+    #Platform: XXX
 
     # XRd login details.
     # These must be set before running XRd.
@@ -66,6 +80,15 @@ tests:
   # Create an EKS cluster in an existing VPC.
   xrd-eks-existing-vpc:
     template: cf-templates/xrd-eks-existing-vpc-cf.yaml
+    parameters:
+      # The subnet IDs output from the xrd-vpc stack are required
+      # to run this stack.
+      # Note: For some reason both public subnet IDs need to be passed to get a
+      # Bastion host (technically a bug - only one should be needed).
+      #PrivateSubnet1ID: XXX
+      #PrivateSubnet2ID: XXX
+      #PublicSubnet1ID: XXX
+      #PublicSubnet2ID: XXX
 
   # Create a new VPC and an EKS cluster inside it.
   xrd-eks-new-vpc:
@@ -95,27 +118,27 @@ tests:
   xrd-singleton-vrouter:
     template: cf-templates/xrd-singleton-existing-eks-cf.yaml
 
-  # Launch a worker node suitable for a single XRd node launched by
-  # xrd-singleton-vrouter-helm.
+  # Launch a worker node suitable for a single XRd vRouter container.
   xrd-singleton-vrouter-infra:
     template: cf-templates/xrd-singleton-existing-eks-cf.yaml
     parameters:
       SkipHelmRelease: "Yes"
 
   # Launch a single XRd vRouter instance on an existing worker node.
-  xrd-singleton-vrouter-helm:
+  xrd-singleton-vrouter-release:
     template: cf-templates/xrd-singleton-existing-eks-cf.yaml
     parameters:
       SkipNodeStack: "Yes"
 
-  # Launch a worker node and run a single XRd Control Plane instance on it.
+  # Launch a worker node and run a single XRd Control Plane instance on it
+  # (e.g. an instance launched by xrd-singelton-vrouter-release).
   xrd-singleton-control-plane:
     template: cf-templates/xrd-singleton-existing-eks-cf.yaml
     parameters:
       Platform: ControlPlane
 
-  # Launch a worker node suitable for a single XRd node launched by
-  # xrd-singleton-control-plane-helm.
+  # Launch a worker node suitable for a single XRd Control Plane instance
+  # (e.g. an instance launched by xrd-singleton-control-plane-release).
   xrd-singleton-control-plane-infra:
     template: cf-templates/xrd-singleton-existing-eks-cf.yaml
     parameters:
@@ -123,22 +146,20 @@ tests:
       SkipHelmRelease: "Yes"
 
   # Launch a single XRd Control Plane instance on an existing worker node.
-  xrd-singleton-control-plane-helm:
+  xrd-singleton-control-plane-release:
     template: cf-templates/xrd-singleton-existing-eks-cf.yaml
     parameters:
       Platform: ControlPlane
       SkipNodeStack: "Yes"
 
-  # Create a m5n.24xlarge worker node with 15 interfaces, and launch an
+  # Create a m5.24xlarge worker node with 15 interfaces, and launch an
   # XRd vRouter instance on it that uses all 14 available interfaces (with the
   # first interface reserved for cluster communication).
   xrd-singleton-vrouter-14interfaces:
     template: cf-templates/xrd-singleton-existing-eks-cf.yaml
     parameters:
-      SubnetID: subnet-009292ef651433a31
-      NodeIP: "10.0.101.21"
-      XrdRootUserName: cisco
-      XrdRootPassword: cisco123
+      SubnetID: ""
+      NodeIP: ""
       NodeInstanceType: m5.24xlarge
       XrdInterface1IP: "10.0.1.110/24"
       XrdInterface1SubnetTagValue: 1
@@ -182,7 +203,7 @@ tests:
       SkipHelmRelease: "Yes"
 
   # Just install XRd and host container for the template above.
-  xrd-overlay-helm:
+  xrd-overlay-release:
     template: cf-templates/xrd-overlay-example-existing-eks-cf.yaml
     parameters:
       SkipNodeStack: "Yes"

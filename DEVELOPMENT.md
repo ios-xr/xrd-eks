@@ -4,7 +4,7 @@ This page is __not__ intended for long-term XRd deployments (which shouldn't
 use the CloudFormation samples anyway), it is aimed at XRd developers and
 testers wanting flexible deployments in AWS.
 
-Before continuing, make sure you've read the [README](REAMDE.md).
+Before continuing, make sure you've read the [README](README.md).
 
 The general recommendation for development is to use AWS's
 [taskcat](https://github.com/aws-ia/taskcat) tool.
@@ -43,6 +43,6 @@ The recommended flow for development is as follows:
      This is the major AWS cost for the deployment so stopping them can
      reduce this substantially (especially if using expensive EC2 instance
      types such as m5.24xlarge). When development starts again simply
-     start the nodes again and the cluster shoudl recover.
+     start the nodes again and the cluster should recover.
      Obviously for longer-term stoppages the whole cluster should be torn
      down.
