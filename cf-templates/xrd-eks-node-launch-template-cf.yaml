@@ -78,7 +78,7 @@ Parameters:
     Description: ID of subnet for the primary (K8S) ENI for XRd worker nodes (e.g.,subnet-a0246123).
     Type: AWS::EC2::Subnet::Id
   NodeInstanceType:
-    Default: m5n.2xlarge
+    Default: m5.2xlarge
     AllowedValues:
       - m5.2xlarge
       - m5.24xlarge
@@ -437,16 +437,18 @@ Resources:
                   #!/bin/bash -x
                   exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-                  echo "fs.inotify.max_user_instances=64000" >> /etc/sysctl.d/50-xrd.conf
-                  echo "fs.inotify.max_user_watches=64000" >> /etc/sysctl.d/50-xrd.conf
-                  echo "kernel.randomize_va_space=2" >> /etc/sysctl.d/50-xrd.conf
-                  echo "net.core.rmem_max=67108864" >> /etc/sysctl.d/50-xrd.conf
-                  echo "net.core.wmem_max=67108864" >> /etc/sysctl.d/50-xrd.conf
-                  echo "net.core.rmem_default=67108864" >> /etc/sysctl.d/50-xrd.conf
-                  echo "net.core.wmem_default=67108864" >> /etc/sysctl.d/50-xrd.conf
-                  echo "net.core.netdev_max_backlog=300000" >> /etc/sysctl.d/50-xrd.conf
-                  echo "net.core.optmem_max=67108864" >> /etc/sysctl.d/50-xrd.conf
-                  echo "net.ipv4.udp_mem=1124736 10000000 67108864" >> /etc/sysctl.d/50-xrd.conf
+                  # Set in /etc/sysctl.conf as AWS sets some values there
+                  # that override values in /etc/sysctl.d/*.
+                  echo "fs.inotify.max_user_instances=64000" >> /etc/sysctl.conf
+                  echo "fs.inotify.max_user_watches=64000" >> /etc/sysctl.conf
+                  echo "kernel.randomize_va_space=2" >> /etc/sysctl.conf
+                  echo "net.core.rmem_max=67108864" >> /etc/sysctl.conf
+                  echo "net.core.wmem_max=67108864" >> /etc/sysctl.conf
+                  echo "net.core.rmem_default=67108864" >> /etc/sysctl.conf
+                  echo "net.core.wmem_default=67108864" >> /etc/sysctl.conf
+                  echo "net.core.netdev_max_backlog=300000" >> /etc/sysctl.conf
+                  echo "net.core.optmem_max=67108864" >> /etc/sysctl.conf
+                  echo "net.ipv4.udp_mem=1124736 10000000 67108864" >> /etc/sysctl.conf
                   sysctl -p --system
                   ${VRouterSetup}
                   ${ProxySetup}

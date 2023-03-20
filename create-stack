@@ -150,6 +150,7 @@ add_parameter Platform "${PLATFORM}"
 add_parameter XrdRootUserName "${XR_USERNAME}"
 add_parameter XrdRootPassword "${XR_PASSWORD}"
 add_parameter KubernetesVersion "${KUBERNETES_VERSION}"
+add_parameter ImageTag "7.8.1"
 
 if [ -n "${CUSTOM_AMI_ID:-}" ]; then
     add_parameter CustomAmiId "${CUSTOM_AMI_ID}"

@@ -11,7 +11,7 @@ Parameters:
     Default: ""
     Description: AMI id of image suitable for running XRd vRouter
   NodeInstanceType:
-    Default: m5n.2xlarge
+    Default: m5.2xlarge
     AllowedValues:
       - m5.2xlarge
       - m5.24xlarge
@@ -290,19 +290,13 @@ Mappings:
       CpuSet: "1-3"
       ControlPlaneCpuCount: "1"
     m5.24xlarge:
-      # Whilst XRd only needs 6Gb, this is a dual-socket NUMA and hugepages are
-      # split between the sockets so need to allocate double.
-      # [Alternatively could explicitly move to the right socket during boot]
-      HugePagesGB: "12"
+      HugePagesGB: "6"
       IsolatedCores: "16-23"
       HugePages: "hugepages-1Gi: \"6Gi\""
       CpuSet: "12-23"
       ControlPlaneCpuCount: "4"
     m5n.24xlarge:
-      # Whilst XRd only needs 6Gb, this is a dual-socket NUMA and hugepages are
-      # split between the sockets so need to allocate double.
-      # [Alternatively could explicitly move to the right socket during boot]
-      HugePagesGB: "12"
+      HugePagesGB: "6"
       IsolatedCores: "16-23"
       HugePages: "hugepages-1Gi: \"6Gi\""
       CpuSet: "12-23"

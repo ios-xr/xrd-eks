@@ -1,0 +1,31 @@
+# cSpell: Disable
+#
+# User taskcat configuration.
+#
+# This file defines general parameters used for all taskcat invoations.
+#
+# Before using This file should be copied to ~/.taskcat.yml and updated with
+# your values (see https://aws-ia.github.io/taskcat/docs/usage/GENERAL_USAGE/#config-files
+# for precedence rules).
+#
+# You should also check .taskcat.yml for repository taskcat settings.
+general:
+  # Name of the S3 bucket to use.
+  # To be consistent with other scripts (in particular ./publish-s3-bucket)
+  # this should be the result of the following command:
+  # echo $(aws sts get-caller-identity --query "Account" --output text)-xrd-quickstart
+  s3_bucket: XXX
+  auth:
+    # Reference to profile in ~/.aws/credentials
+    default: default
+  regions:
+    # Working region.
+    - "us-east-1"
+
+  parameters:
+    # KeyPairName - SSH keys used to access EC2 instances created.
+    KeyPairName: XXX
+
+    # AdditionalEKSAdmin(User|Role)Arn - Additional admin access to EKS cluster.
+    # AdditionalEKSAdminUserArn:
+    # AdditionalEKSAdminRoleArn:

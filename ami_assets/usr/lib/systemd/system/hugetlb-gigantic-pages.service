@@ -1,0 +1,15 @@
+[Unit]
+Description=HugeTLB Gigantic Pages Reservation
+DefaultDependencies=no
+Before=dev-hugepages.mount
+ConditionPathExists=/sys/devices/system/node
+ConditionKernelCommandLine=hugepagesz=1G
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/etc/xrd/hugetlb-reserve-pages.sh
+EnvironmentFile=/etc/xrd/hugetlb-reserve-env.conf
+
+[Install]
+WantedBy=sysinit.target

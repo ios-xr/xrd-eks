@@ -1,0 +1,221 @@
+# cSpell: Disable
+#
+# Repository taskcat configuration.
+#
+# This file defines test cases to run the CloudFormation templates in this
+# repository, which can then be used with the taskcat tool to easily
+# create new stacks.
+#
+# Before using taskcat for first time, you should check and fill in the
+# EKS cluster and XRd settings in the parameters section below with
+# details for your test deployment.
+#
+# You should also check .user_taskcat.yml for more general taskcat settings.
+general:
+  parameters:
+    # =========================================================================
+    # These settings should be left alone unless you know what you're doing.
+    # These parameters identify the S3 buckets where the CloudFormation
+    # resources can be found.
+    XrdS3BucketName: $[taskcat_autobucket]
+    # The key prefix needs to match <project name>/ (where project name is
+    # configured below) to work with taskcat's autosync.
+    XrdS3KeyPrefix: xrd-eks/
+    XrdS3BucketRegion: $[taskcat_current_region]
+    # Where the xrd-overlay Helm chart can be found.
+    HelmRepository: https://ios-xr.github.io/xrd-eks/
+    # =========================================================================
+
+    # The rest of the settings below here can freely be changed.
+    AvailabilityZones: $[taskcat_genaz_2] # "us-east-2a,us-east-2b"
+
+    # EKS Cluster settings.
+    ClusterName: "xrd-cluster"
+    EKSClusterName: "xrd-cluster"
+    # Remote access to the EKS cluster.
+    RemoteAccessCIDR: "0.0.0.0/0"
+    EKSPublicAccessEndpoint: Enabled
+
+    # Worker node settings.
+    #CustomAmiId: XXX
+    #NodeInstanceType: XXX
+
+    # SubnetID is the subnet the worker nodes' control plane interface IP
+    # is allocated from. This is required for stacks that instantiate nodes
+    # in a pre-existing VPC, and will change whenever a VPC is (re)created.
+    #
+    # The tagged subnet 'PrivateSubnet1A' is typically used:
+    # aws ec2 describe-subnets --query 'Subnets[?not_null(Tags[?Value == `PrivateSubnet1A`])].SubnetId | [0]' --output text
+    #SubnetID: XXX
+
+    # Default XRd platform (vRouter by default)
+    #Platform: XXX
+
+    # XRd login details.
+    # These must be set before running XRd.
+    #XrdRootUserName: changeme
+    #XrdRootPassword: changeme
+
+project:
+  # Sets key prefix for all files within the S3 bucket.
+  # This must match the `XrdS3KeyPrefix` above and must be kept in sync with
+  # the publish-s3-bucket and create-stack scripts in this repository.
+  name: 'xrd-eks'
+  # Using pinned versions of the submodules, including built resources,
+  # so don't build them here.
+  build_submodules: false
+  # No lambdas to package, so can set this to false.
+  # This also removes the dependency on docker.
+  package_lambda: false
+
+tests:
+  # Create an AMI.
+  xrd-eks-ami:
+    template: cf-templates/xrd-eks-ami-cf.yaml
+
+  # Create a VPC.
+  xrd-vpc:
+    template: cf-templates/xrd-vpc-cf.yaml
+
+  # Create an EKS cluster in an existing VPC.
+  xrd-eks-existing-vpc:
+    template: cf-templates/xrd-eks-existing-vpc-cf.yaml
+    parameters:
+      # The subnet IDs output from the xrd-vpc stack are required
+      # to run this stack.
+      # Note: For some reason both public subnet IDs need to be passed to get a
+      # Bastion host (technically a bug - only one should be needed).
+      PrivateSubnet1ID: XXX
+      #PrivateSubnet2ID: XXX
+      #PublicSubnet1ID: XXX
+      #PublicSubnet2ID: XXX
+
+  # Create a new VPC and an EKS cluster inside it.
+  xrd-eks-new-vpc:
+    template: cf-templates/xrd-eks-new-vpc-cf.yaml
+
+  # Create a worker node with four interfaces.
+  xrd-eks-node:
+    template: cf-templates/xrd-eks-node-cf.yaml
+    parameters:
+      WorkerNodeName: "standalone-worker"
+      NodeInstanceType: "m5n.2xlarge"
+      # Primary IP for eth0 use for cluster networking.
+      NodeIP: "10.0.101.11"
+
+      # m5n.2xlarge instances are limited to 3 XRd interfaces - the instance
+      # type supports maximum of four interfaces, one of which is used by the
+      # host rather than XRd.
+      XrdInterface1IP: "10.0.1.10"
+      XrdInterface2IP: "10.0.2.10"
+      XrdInterface3IP: "10.0.3.10"
+
+      XrdInterface1SubnetTagValue: 1
+      XrdInterface2SubnetTagValue: 2
+      XrdInterface3SubnetTagValue: 3
+
+  # Launch a worker node and run a single XRd vRouter container on it.
+  xrd-singleton-vrouter:
+    template: cf-templates/xrd-singleton-existing-eks-cf.yaml
+
+  # Launch a worker node suitable for a single XRd vRouter container.
+  xrd-singleton-vrouter-infra:
+    template: cf-templates/xrd-singleton-existing-eks-cf.yaml
+    parameters:
+      SkipHelmRelease: "Yes"
+
+  # Launch a single XRd vRouter container on an existing worker node.
+  xrd-singleton-vrouter-release:
+    template: cf-templates/xrd-singleton-existing-eks-cf.yaml
+    parameters:
+      SkipNodeStack: "Yes"
+
+  # Launch a worker node and run a single XRd Control Plane container on it
+  # (e.g. an instance launched by xrd-singleton-vrouter-release).
+  xrd-singleton-control-plane:
+    template: cf-templates/xrd-singleton-existing-eks-cf.yaml
+    parameters:
+      Platform: ControlPlane
+
+  # Launch a worker node suitable for a single XRd Control Plane container
+  # (e.g. an instance launched by xrd-singleton-control-plane-release).
+  xrd-singleton-control-plane-infra:
+    template: cf-templates/xrd-singleton-existing-eks-cf.yaml
+    parameters:
+      Platform: ControlPlane
+      SkipHelmRelease: "Yes"
+
+  # Launch a single XRd Control Plane container on an existing worker node.
+  xrd-singleton-control-plane-release:
+    template: cf-templates/xrd-singleton-existing-eks-cf.yaml
+    parameters:
+      Platform: ControlPlane
+      SkipNodeStack: "Yes"
+
+  # Create a m5.24xlarge worker node with 15 interfaces, and launch an
+  # XRd vRouter instance on it that uses all 14 available interfaces (with the
+  # first interface reserved for cluster communication).
+  xrd-singleton-vrouter-14interfaces:
+    template: cf-templates/xrd-singleton-existing-eks-cf.yaml
+    parameters:
+      NodeInstanceType: m5.24xlarge
+      XrdInterface1IP: "10.0.1.110/24"
+      XrdInterface1SubnetTagValue: 1
+      XrdInterface2IP: "10.0.2.110/24"
+      XrdInterface2SubnetTagValue: 2
+      XrdInterface3IP: "10.0.3.110/24"
+      XrdInterface3SubnetTagValue: 3
+      XrdInterface4IP: "10.0.4.110/24"
+      XrdInterface4SubnetTagValue: 4
+      XrdInterface5IP: "10.0.5.110/24"
+      XrdInterface5SubnetTagValue: 5
+      XrdInterface6IP: "10.0.6.110/24"
+      XrdInterface6SubnetTagValue: 6
+      XrdInterface7IP: "10.0.7.110/24"
+      XrdInterface7SubnetTagValue: 7
+      XrdInterface8IP: "10.0.8.110/24"
+      XrdInterface8SubnetTagValue: 8
+      XrdInterface9IP: "10.0.9.110/24"
+      XrdInterface9SubnetTagValue: 9
+      XrdInterface10IP: "10.0.10.110/24"
+      XrdInterface10SubnetTagValue: 10
+      XrdInterface11IP: "10.0.11.110/24"
+      XrdInterface11SubnetTagValue: 11
+      XrdInterface12IP: "10.0.12.110/24"
+      XrdInterface12SubnetTagValue: 12
+      XrdInterface13IP: "10.0.13.110/24"
+      XrdInterface13SubnetTagValue: 13
+      XrdInterface14IP: "10.0.14.110/24"
+      XrdInterface14SubnetTagValue: 14
+
+  # Launch three worker nodes, and install the the full GRE overlay
+  # template with two XRd vRouter instances and two 'host' alpine containers
+  # in an existing EKS cluster.
+  xrd-overlay:
+    template: cf-templates/xrd-overlay-example-existing-eks-cf.yaml
+
+  # Just create the worker nodes for the overlay template above.
+  xrd-overlay-infra:
+    template: cf-templates/xrd-overlay-example-existing-eks-cf.yaml
+    parameters:
+      SkipHelmRelease: "Yes"
+
+  # Just install XRd and host container for the template above.
+  xrd-overlay-release:
+    template: cf-templates/xrd-overlay-example-existing-eks-cf.yaml
+    parameters:
+      SkipNodeStack: "Yes"
+
+  # Bring up the singleton example from scratch, including creating a VPC,
+  # EKS cluster, worker node and installing XRd.
+  xrd-example-singleton:
+    template: cf-templates/xrd-example-cf.yaml
+    parameters:
+      Application: Singleton
+
+  # Bring up the overlay example from scratch, including creating a VPC,
+  # EKS cluster, worker nodes and installing XRd and host containers.
+  xrd-example-overlay:
+    template: cf-templates/xrd-example-cf.yaml
+    parameters:
+      Application: Overlay

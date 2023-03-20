@@ -1,0 +1,60 @@
+#!/bin/bash -e
+# Taskcat wrapper script.
+
+# Annoyingly 'taskcat deploy' doesn't support --exclude-prefix
+# EXCLUDE_OPTIONS="--exclude-prefix --exclude-prefix helm-charts/"
+
+AWS_REGION=${AWS_REGION:-$(aws configure get region)}
+AWS_PROFILE=${AWS_PROFILE:-default}
+
+usage() {
+    >&2 cat << EOF
+Usage: tc ACTION TESTCASE
+
+ACTION must be one of:
+  deploy       - Deploy a tc test case
+  delete       - Delete an existing tc test case
+  list         - List the existing test cases
+  delete-wait  - Wait until all deletes have completed
+
+EOF
+}
+
+if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
+    usage
+    exit 0
+fi
+
+if [ $# != 2 ]; then
+    usage
+    exit 2
+fi
+
+ACTION=$1
+CASE=$2
+
+case ${ACTION} in
+    deploy)
+        taskcat deploy run -r "${AWS_REGION}" -t "$CASE" -n "$CASE"
+        ;;
+
+    delete)
+        taskcat delete -r "${AWS_REGION}" -a "$AWS_PROFILE" "$CASE"
+        ;;
+
+    list)
+        taskcat list -r "${AWS_REGION}"
+        ;;
+
+    delete-wait)
+        STACK_NAMES=$(aws cloudformation list-stacks --output text --query 'StackSummaries[?StackStatus==`DELETE_IN_PROGRESS` && !contains(keys(@),`ParentId`)].StackName')
+        for STACK_NAME in $STACK_NAMES
+        do
+            aws cloudformation wait stack-delete-complete --stack-name "${STACK_NAME}"
+        done
+        ;;
+
+    *)
+        >&2 echo "Invalid action: $ACTION"
+        ;;
+esac
