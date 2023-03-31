@@ -18,8 +18,8 @@ tuned-profiles-nfv-guest
 
 # Additional packages required to build DPDK
 DPDK_BUILD_PACKAGES="""
+git
 kernel-devel-$(uname -r)
-numactl-devel
 """
 
 # Additional package group required to build DPDK
@@ -40,8 +40,10 @@ AMI_ASSETS="""
 /usr/lib/systemd/system/hugetlb-gigantic-pages.service
 """
 
-DPDK_SRC=${DPDK_SRC:-"https://fast.dpdk.org/rel/dpdk-19.11.12.tar.xz"}
-DPDK_DIR=${DPDK_DIR:-"dpdk-stable-19.11.12"}
+DPDK_KMODS_REPO=${DPDK_KMODS_REPO:-"git://dpdk.org/dpdk-kmods"}
+DPDK_KMODS_DIR=${DPDK_KMODS_DIR:-"dpdk-kmods"}
+DPDK_KMODS_VER=${DPDK_KMODS_VER:-"e721c733cd24206399bebb8f0751b0387c4c1595"}
+
 
 install_packages() {
     # Want whitespace splitting here for multiple packages.
@@ -68,29 +70,24 @@ install_ami_assets() {
 }
 
 build_igb_uio() {
-    local DPDK_FILE
-
-    DPDK_FILE=$(basename "$DPDK_SRC")
-
     # Want whitespace splitting here for multiple packages.
     # shellcheck disable=SC2086
     sudo yum install -y $DPDK_BUILD_PACKAGES
     sudo yum groupinstall -y "$DPDK_BUILD_GROUP"
 
-    wget "$DPDK_SRC"
-    tar xf "$DPDK_FILE"
-    cd "$DPDK_DIR"
+    git clone "$DPDK_KMODS_REPO" "$DPDK_KMODS_DIR"
+    cd "$DPDK_KMODS_DIR"
+    git checkout "$DPDK_KMODS_VER"
 
-    make config T=x86_64-native-linux-gcc
-    make -j4
+    make -C linux/igb_uio
 
-    sudo cp build/kmod/igb_uio.ko /lib/modules/"$(uname -r)"/kernel/drivers/uio
+    sudo cp linux/igb_uio/igb_uio.ko /lib/modules/"$(uname -r)"/kernel/drivers/uio
     sudo depmod -a
 
     cd ..
 
     # Clean up
-    rm -rf "$DPDK_DIR" "$DPDK_FILE"
+    rm -rf "$DPDK_KMODS_DIR"
     # Want whitespace splitting here for multiple packages.
     # shellcheck disable=SC2086
     sudo yum remove -y $DPDK_BUILD_PACKAGES
