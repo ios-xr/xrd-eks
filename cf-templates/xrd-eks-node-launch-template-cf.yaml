@@ -449,6 +449,7 @@ Resources:
                   echo "net.core.netdev_max_backlog=300000" >> /etc/sysctl.conf
                   echo "net.core.optmem_max=67108864" >> /etc/sysctl.conf
                   echo "net.ipv4.udp_mem=1124736 10000000 67108864" >> /etc/sysctl.conf
+                  echo "kernel.core_pattern=|/lib/systemd/systemd-coredump %P %u %g %s %t 9223372036854775808 %h" >> /etc/sysctl.conf
                   sysctl -p --system
                   ${VRouterSetup}
                   ${ProxySetup}
