@@ -30,6 +30,7 @@ AMI_ASSETS="""
 /etc/modules-load.d/vfio-pci.conf
 /etc/modules-load.d/uio.conf
 /etc/modules-load.d/igb_uio.conf
+/etc/systemd/coredump.conf
 /etc/tuned/xrd-eks-node-variables.conf
 /etc/tuned/xrd-eks-node/defirqaffinity.py
 /etc/tuned/xrd-eks-node/tuned.conf
