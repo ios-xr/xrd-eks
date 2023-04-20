@@ -7,6 +7,7 @@ import warnings
 from pathlib import Path
 from typing import Optional
 
+import boto3
 import pytest
 
 from . import utils
@@ -219,6 +220,11 @@ def stack(
     finally:
         if test is not None and not request.config.option.aws_skip_teardown:
             test.clean_up()
+
+            # Delete the XRd AMI that was created.
+            cf = boto3.client("cloudformation")
+            version = request.config.option.eks_kubernetes_version.replace(".", "-")
+            cf.delete_stack(StackName=f"xrd-quickstart-AMI-{version}")
 
 
 @pytest.fixture(scope="session")

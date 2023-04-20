@@ -17,7 +17,7 @@ pipeline {
     stages {
         stage("Remove existing XRd S3 bucket") {
             steps {
-                sh "aws s3 rb s3://${env.BUCKET_NAME} --force"
+                sh "aws s3 rb s3://${env.BUCKET_NAME} --force || true"
             }
         }
 
