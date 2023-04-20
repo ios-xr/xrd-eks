@@ -2,12 +2,12 @@
 
 """Pytest hooks and fixtures."""
 
-import boto3
 import subprocess
 import warnings
 from pathlib import Path
 from typing import Optional
 
+import boto3
 import pytest
 
 from . import utils
