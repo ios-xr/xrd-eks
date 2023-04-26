@@ -165,6 +165,10 @@ create_bucket() {
 
     aws s3api put-public-access-block --bucket "${BUCKET_NAME}" --public-access-block-configuration "BlockPublicPolicy=false"
     aws s3api put-bucket-policy --bucket "${BUCKET_NAME}" --policy "${POLICY}"
+
+    aws s3api put-bucket-tagging \
+        --bucket "${BUCKET_NAME}" \
+        --tagging "TagSet=[{Key='Data Classification',Value='Cisco Public'},{Key=IntendedPublic,Value=true}]"
 }
 
 sync_dir() {
