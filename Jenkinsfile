@@ -15,6 +15,12 @@ pipeline {
     }
 
     stages {
+        stage("Initialize submodules") {
+            steps {
+                sh "git submodule update --init --recursive"
+            }
+        }
+
         stage("Remove existing XRd S3 bucket") {
             steps {
                 sh "aws s3 rb s3://${env.BUCKET_NAME} --force || true"
