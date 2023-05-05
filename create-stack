@@ -161,6 +161,9 @@ set -x
 aws cloudformation delete-stack --stack-name "${STACK_NAME}" || true
 aws cloudformation wait stack-delete-complete --stack-name "${STACK_NAME}" || true
 
+aws cloudformation delete-stack --stack-name eks-quickstart-RegionalSharedResources || true
+aws cloudformation wait stack-delete-complete --stack-name eks-quickstart-RegionalSharedResources || true
+
 # shellcheck disable=SC2086
 # Relying on word splitting to pass ${PARAMETERS} and CAPABILITIES as individual args.
 aws cloudformation create-stack --stack-name "${STACK_NAME}" \
